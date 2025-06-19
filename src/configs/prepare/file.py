@@ -44,12 +44,15 @@ class FileConfig:
         # Auto
         self.my_timestamp = datetime.today().strftime("%Y-%m-%d-%H-%M-%S")
         self.my_pile_prev_p = None
-        self.load_model = None
+        self.load_model = ""
         self.epoch_begin = None
 
     def check(self):
         """检查文件路径的有效性。"""
         # 检查必要的文件是否存在
+        if not os.path.exists(self.proj_dir):
+            os.makedirs(self.proj_dir)
+
         if self.model_path and not os.path.exists(self.model_path):
             logger.warning(f"Model file not found: {self.model_path}")
             

@@ -1,4 +1,6 @@
 import os
+from types import SimpleNamespace
+
 import torch
 from src.rwkvt.lightning_train.light_rwkv import RWKV
 from lightning_utilities.core.rank_zero import rank_zero_info
@@ -9,7 +11,8 @@ from src.configs.configs import file_config
 from src.configs.configs import model_config
 
 def load_peft_model():
-    args = train_config
+    args = SimpleNamespace(**(vars(train_config) | vars(file_config) | vars(model_config)))
+
     freeze = False
     if args.peft == 'lora':
         assert args.lora_config['lora_r'] > 0, "LoRA should have its `r` > 0"

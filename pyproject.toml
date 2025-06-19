@@ -23,3 +23,16 @@ dependencies = [
     "triton>=3.3.1",
     "wandb>=0.20.1",
 ]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu126", marker = "platform_system != 'Darwin'" },
+]
+torchvision = [
+  { index = "pytorch-cu126", marker = "platform_system != 'Darwin'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
