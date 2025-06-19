@@ -24,38 +24,28 @@ def main():
     file_config.check(); model_config.check(); train_config.check()
     file_config.show(); model_config.show(); train_config.show()
 
-    os.environ["WKV"] = model_config.op
-    os.environ["FUSED_KERNEL"] = '1' if model_config.fused_kernel else '0'
-    os.environ["RWKV_MY_TESTING"] = train_config.my_testing
-    os.environ["RWKV_TRAIN_TYPE"] = train_config.train_type
-    os.environ["RWKV_CTXLEN"] = str(train_config.ctx_len)
-    os.environ["RWKV_HEAD_SIZE_A"] = str(model_config.head_size_a)
-    os.environ["RWKV_FLOAT_MODE"] = train_config.precision
 
     train_config.my_timestamp = datetime.datetime.today().strftime("%Y-%m-%d-%H-%M-%S")
     train_config.real_bsz = int(train_config.num_nodes) * int(train_config.devices) * train_config.micro_bsz
 
     args, model = load_peft_model()
 
-    if pl.__version__[0] == '2':
-        trainer = Trainer(
-            accelerator=train_config.accelerator,
-            strategy=train_config.strategy,
-            devices=train_config.devices,
-            num_nodes=train_config.num_nodes,
-            precision=train_config.precision,
-            logger=False,
-            callbacks=[train_callback(train_config)],
-            max_epochs=train_config.epoch_count,
-            check_val_every_n_epoch=train_config.check_val_every_n_epoch,
-            num_sanity_val_steps=train_config.num_sanity_val_steps,
-            log_every_n_steps=train_config.log_every_n_steps,
-            enable_checkpointing=False,
-            accumulate_grad_batches=train_config.accumulate_grad_batches,
-            gradient_clip_val=train_config.gradient_clip_val,
-        )
-    else:
-        trainer = Trainer.from_argparse_args(train_config, callbacks=[train_callback(train_config)])
+    trainer = Trainer(
+        accelerator=train_config.accelerator,
+        strategy=train_config.strategy,
+        devices=train_config.devices,
+        num_nodes=train_config.num_nodes,
+        precision=train_config.precision,
+        logger=False,
+        callbacks=[train_callback(train_config)],
+        max_epochs=train_config.epoch_count,
+        check_val_every_n_epoch=train_config.check_val_every_n_epoch,
+        num_sanity_val_steps=train_config.num_sanity_val_steps,
+        log_every_n_steps=train_config.log_every_n_steps,
+        enable_checkpointing=False,
+        accumulate_grad_batches=train_config.accumulate_grad_batches,
+        gradient_clip_val=train_config.gradient_clip_val,
+    )
 
     train_data = get_data_by_l_version(trainer)
     trainer.fit(model, train_data)

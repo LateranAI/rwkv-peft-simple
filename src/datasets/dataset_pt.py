@@ -13,7 +13,7 @@ from rwkv.utils import PIPELINE
 from src.datasets.SFTdataset import sft_dataset
 
 from .mask import mask_fn_dict
-pipeline = PIPELINE('rwkv6', "rwkv_vocab_v20230424")
+pipeline = PIPELINE('rwkv7', "rwkv_vocab_v20230424")
 
 from src.configs.train import train_config
 from src.configs.file import file_config
@@ -26,21 +26,7 @@ def get_vocab_size() -> int:
     return int(temp)
 
 def get_data_by_l_version(trainer: L.Trainer):
-    if L.__version__[0] == '1':
-        train_data = MyDataset()
-        train_config.vocab_size = train_data.vocab_size
-        train_data.real_epoch = trainer.current_epoch
-        train_data.rank = trainer.global_rank
-        train_data.world_size = trainer.world_size
-        train_data.setup(trainer.global_rank, trainer.world_size,
-                        int(train_config.devices), train_config.data_shuffle)
-        train_data = DataLoader(train_data, shuffle=train_config.data_shuffle, pin_memory=True, batch_size=train_config.micro_bsz, num_workers=1, persistent_workers=False, drop_last=True)
-
-    elif L.__version__[0] == '2':
-        train_data = MyDataModule()
-    else:
-        raise ValueError(f"Unsupported PyTorch Lightning version: {L.__version__}")
-    return train_data
+    return MyDataModule()
 
 class GlobalIndexManager:
     def __init__(self, rank=0, device_num=1, shuffle=True):

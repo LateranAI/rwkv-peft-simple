@@ -4,7 +4,7 @@
 from torch.utils.checkpoint import checkpoint as torch_checkpoint
 #from adam_mini import Adam_mini
 
-import os, math, gc, importlib
+import math, gc, importlib
 import torch
 from src.configs.train import train_config
 from src.configs.model import model_config
@@ -21,14 +21,7 @@ from src.rwkvt.infctx_module import BlockStateList
 print('RWKV_MY_TESTING', train_config.my_testing)
 
 
-if "7" in train_config.my_testing:
-    from src.model.rwkv7.model import RWKV7 as RWKVModel
-elif "6" in train_config.my_testing:
-    from src.rwkvt.rwkv6.model import RWKV6 as RWKVModel
-elif "5" in train_config.my_testing:
-    from src.rwkvt.rwkv5.model import RWKV5 as RWKVModel
-else:
-    raise ValueError(f"Unsupported model version: . Valid options: 5,6,7")
+from src.model.rwkv7.model import RWKV7 as RWKVModel
 
 if train_config.train_type == 'infctx':
     class L2Wrap(torch.autograd.Function):
@@ -237,10 +230,7 @@ class RWKV(pl.LightningModule):
     
     
     def training_step_end(self, batch_parts):
-        if pl.__version__[0]!='2':
-            all = self.all_gather(batch_parts)
-            if self.trainer.is_global_zero:
-                self.trainer.my_loss_all = all
+        pass
 
     def generate_init_weight(self):
         print(

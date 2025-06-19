@@ -60,7 +60,8 @@ class TOKENIZER():
         else:
             top_p = top_p_usual
 
-        if os.environ["RWKV_RUN_DEVICE"] == "cpu":
+        from src.configs.train import train_config
+        if train_config.accelerator == "cpu":
             probs = probs.numpy()
             sorted_probs = np.sort(probs)[::-1]
             cumulative_probs = np.cumsum(sorted_probs)
