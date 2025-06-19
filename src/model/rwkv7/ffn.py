@@ -1,18 +1,19 @@
-import os
 import torch.nn as nn
 from src.rwkvt.infctx_module import *
 from src.rwkvt.peft.rwkvLinear import make_linear_ffn
+from src.configs.train import train_config
+from src.configs.model import model_config
 
-if os.environ["FUSED_KERNEL"] == '1':
+if model_config.fused_kernel:
     from rwkvfla.ops.rwkv7 import channel_mixing_rwkv7
 else:
     channel_mixing_rwkv7 = None
 
 def RWKV_Cmix_v7(*args, **kwargs):
     
-    if os.environ["RWKV_TRAIN_TYPE"] == 'infctx':
+    if train_config.train_type == 'infctx':
         return RWKV_CMix_x070_infctx(*args, **kwargs)
-    elif os.environ["FUSED_KERNEL"] == '1':
+    elif model_config.fused_kernel:
         return RWKV_CMix_x070_fla(*args, **kwargs)
     else:
         return RWKV_CMix_x070(*args, **kwargs)

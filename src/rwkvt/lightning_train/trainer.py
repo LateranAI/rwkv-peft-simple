@@ -100,10 +100,9 @@ class train_callback(pl.Callback):
         token_per_step = args.ctx_len * args.real_bsz
         real_step = trainer.global_step + args.epoch_begin * args.epoch_steps
 
-        if pl.__version__[0]=='2' :
-            loss = outputs['loss']
-            if int(args.devices)>1:
-                torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.SUM)
+        loss = outputs['loss']
+        if int(args.devices) > 1:
+            torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.SUM)
 
         if trainer.is_global_zero:  # logging
             t_now = time.time_ns()
@@ -118,10 +117,7 @@ class train_callback(pl.Callback):
             except:
                 pass
             trainer.my_time_ns = t_now
-            if pl.__version__[0]=='2':
-                trainer.my_loss = loss*trainer.accumulate_grad_batches/int(args.devices)
-            else:
-                trainer.my_loss = trainer.my_loss_all.float().mean().item()
+            trainer.my_loss = loss * trainer.accumulate_grad_batches / int(args.devices)
             trainer.my_loss_sum += trainer.my_loss
             trainer.my_loss_count += 1
             trainer.my_epoch_loss = trainer.my_loss_sum / trainer.my_loss_count
@@ -151,10 +147,7 @@ class train_callback(pl.Callback):
 
     def on_train_epoch_start(self, trainer, pl_module):
         args = self.args
-        if pl.__version__[0]=='2':
-            dataset = trainer.train_dataloader.dataset
-        else:
-            dataset = trainer.train_dataloader.dataset.datasets
+        dataset = trainer.train_dataloader.dataset
         assert "MyDataset" in str(dataset)
         dataset.global_rank = trainer.global_rank
         dataset.real_epoch = int(args.epoch_begin + trainer.current_epoch)

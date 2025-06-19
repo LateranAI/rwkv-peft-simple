@@ -1,5 +1,5 @@
 
-import os, math
+import math
 
 import torch.nn as nn
 from src.rwkvt.infctx_module import *
@@ -8,7 +8,10 @@ from src.rwkvt.peft.rwkvLinear import make_linear_att
 from src.model.operator.rwkvop import RUN_CUDA_RWKV7g, RUN_RWKV7_STATE, RUN_RWKV7_INFCTX
 from torch.nn import functional as F
 
-if os.environ["FUSED_KERNEL"] == '1':
+from src.configs.model import model_config
+from src.configs.train import train_config
+
+if model_config.fused_kernel:
     from rwkvfla.ops.rwkv7 import fused_addcmul_rwkv7
     from rwkvfla.modules.layernorm import GroupNorm as FusedGroupNorm
 else:
@@ -17,9 +20,9 @@ else:
 
 def RWKV_Tmix_v7(*args, **kwargs):
     
-    if os.environ["RWKV_TRAIN_TYPE"] == 'state':
+    if train_config.train_type == 'state':
         return RWKV_Tmix_x070_State(*args, **kwargs)
-    elif os.environ["RWKV_TRAIN_TYPE"] == 'infctx':
+    elif train_config.train_type == 'infctx':
         return RWKV_Tmix_x070_infctx(*args, **kwargs)
     else:
         return RWKV_Tmix_x070(*args, **kwargs)
@@ -38,7 +41,7 @@ class RWKV_Tmix_x070(nn.Module):
         N = self.head_size
         C = args.n_embd
 
-        if os.environ["FUSED_KERNEL"] == '1':
+        if model_config.fused_kernel:
             self.addcmul_kernel = self.fused_addcmul
         else:
             self.addcmul_kernel = self.torch_addcmul
@@ -110,7 +113,7 @@ class RWKV_Tmix_x070(nn.Module):
             self.key = make_linear_att(C, C, bias=False)
             self.value = make_linear_att(C, C, bias=False)
             self.output = make_linear_att(C, C, bias=False)
-            if os.environ["FUSED_KERNEL"] == '1':
+            if model_config.fused_kernel:
                 self.ln_x = FusedGroupNorm(H, C, eps=(1e-5)*(args.head_size_divisor**2), bias=True) # !!! notice eps value !!!
             else:
                 self.ln_x = nn.GroupNorm(H, C, eps=(1e-5)*(args.head_size_divisor**2))

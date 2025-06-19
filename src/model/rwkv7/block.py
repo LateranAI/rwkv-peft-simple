@@ -1,8 +1,8 @@
-import os
 import torch.nn as nn
 from .ffn import RWKV_Cmix_v7
 from .att import RWKV_Tmix_v7
 from src.rwkvt.infctx_module import BlockState
+from src.configs.train import train_config
 class Block(nn.Module):
     def __init__(self, args, layer_id):
         super().__init__()
@@ -31,7 +31,7 @@ class Block(nn.Module):
     @property
     def _use_infctx(self):
         """判断是否使用无限上下文模式"""
-        return os.environ.get("RWKV_TRAIN_TYPE") == 'infctx'
+        return train_config.train_type == 'infctx'
 
     def forward(self, *args, **kwargs):
         if self._use_infctx:

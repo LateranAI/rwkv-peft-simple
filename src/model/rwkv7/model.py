@@ -2,12 +2,12 @@
 # The RWKV Language Model - https://github.com/BlinkDL/RWKV-LM
 ########################################################################################################
 from torch.utils.checkpoint import checkpoint as torch_checkpoint
-import os
 import torch
 import torch.nn as nn
 import deepspeed
 from src.rwkvt.infctx_module import BlockStateList
 from .block import Block
+from src.configs.train import train_config
 
 class RWKV7(nn.Module):
     def __init__(self, args):
@@ -24,7 +24,7 @@ class RWKV7(nn.Module):
     @property
     def _use_infctx(self):
         """判断是否使用无限上下文模式"""
-        return os.environ.get("RWKV_TRAIN_TYPE") == 'infctx'
+        return train_config.train_type == 'infctx'
 
     def forward(self, *args, **kwargs):
         if self._use_infctx:

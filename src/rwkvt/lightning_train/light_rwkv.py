@@ -4,8 +4,10 @@
 from torch.utils.checkpoint import checkpoint as torch_checkpoint
 #from adam_mini import Adam_mini
 
-import os, math, gc, importlib
+import math, gc, importlib
 import torch
+from src.configs.train import train_config
+from src.configs.model import model_config
 # torch._C._jit_set_profiling_executor(True)
 # torch._C._jit_set_profiling_mode(True)
 import torch.nn as nn
@@ -16,23 +18,12 @@ if importlib.util.find_spec('deepspeed'):
 from src.rwkvt.infctx_module import BlockStateList
 
 
-try:
-    print('RWKV_MY_TESTING', os.environ["RWKV_MY_TESTING"])
-except:
-    os.environ["RWKV_MY_TESTING"] = ''
+print('RWKV_MY_TESTING', train_config.my_testing)
 
 
+from src.model.rwkv7.model import RWKV7 as RWKVModel
 
-if "7" in os.environ["RWKV_MY_TESTING"]:
-    from src.model.rwkv7.model import RWKV7 as RWKVModel
-elif "6" in os.environ["RWKV_MY_TESTING"]:
-    from src.rwkvt.rwkv6.model import RWKV6 as RWKVModel
-elif "5" in os.environ["RWKV_MY_TESTING"]:
-    from src.rwkvt.rwkv5.model import RWKV5 as RWKVModel
-else:
-    raise ValueError(f"Unsupported model version: . Valid options: 5,6,7")
-
-if os.environ["RWKV_TRAIN_TYPE"] == 'infctx':
+if train_config.train_type == 'infctx':
     class L2Wrap(torch.autograd.Function):
         @staticmethod
         def forward(ctx, loss, y, token_amount):
@@ -78,7 +69,7 @@ class RWKV(pl.LightningModule):
         super().__init__()
         self.args = args
         self.model = RWKVModel(args)
-        if os.environ["FUSED_KERNEL"] == '1':
+        if model_config.fused_kernel:
             from rwkvfla.modules import FusedCrossEntropyLoss
             self.criterion = FusedCrossEntropyLoss(inplace_backward=True)
         else:
@@ -165,7 +156,7 @@ class RWKV(pl.LightningModule):
             return cfg.get("offload_optimizer") or cfg.get("offload_param")
         return False
 
-    if os.environ.get("RWKV_TRAIN_TYPE") == 'infctx':
+    if train_config.train_type == 'infctx':
         def forward(self, idx,  last_shift_states: torch.Tensor,
                 last_wkv_states: torch.Tensor, attention_mask=None):
             return self.model(idx, last_shift_states, last_wkv_states, attention_mask)
@@ -173,7 +164,7 @@ class RWKV(pl.LightningModule):
         def forward(self, idx, attention_mask=None):
             return self.model(idx, attention_mask)
 
-    if os.environ.get("RWKV_TRAIN_TYPE") == 'infctx':
+    if train_config.train_type == 'infctx':
         def training_step(self, batch, batch_idx):
             args = self.args
             T_train = args.chunk_ctx 
@@ -239,10 +230,7 @@ class RWKV(pl.LightningModule):
     
     
     def training_step_end(self, batch_parts):
-        if pl.__version__[0]!='2':
-            all = self.all_gather(batch_parts)
-            if self.trainer.is_global_zero:
-                self.trainer.my_loss_all = all
+        pass
 
     def generate_init_weight(self):
         print(
@@ -301,9 +289,9 @@ class RWKV(pl.LightningModule):
                     nn.init.orthogonal_(m[n], gain=gain * scale)
 
             m[n] = m[n].cpu()
-            if os.environ["RWKV_FLOAT_MODE"] == "fp16":
+            if train_config.precision == "fp16":
                 m[n] = m[n].half()
-            elif os.environ["RWKV_FLOAT_MODE"] == "bf16":
+            elif train_config.precision == "bf16":
                 m[n] = m[n].bfloat16()
 
             # if n == "emb.weight":
