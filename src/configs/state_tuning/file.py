@@ -19,7 +19,7 @@ class FileConfig:
 
         # 数据相关
         self.data_file: str = ""      # 与 --data_file 对应，数据集文件路径
-        self.data_type: str = "utf-8"  # 与 --data_type 对应，数据格式(txt/binidx/sft 等)
+        self.data_type: str = "binidx"  # 与 --data_type 对应，数据格式(txt/binidx/sft 等)
 
         self.vocab_size: int = 0       # 与 --vocab_size，对应词表大小（存储于文件）
 

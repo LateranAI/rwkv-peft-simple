@@ -12,8 +12,8 @@ class ModelConfig:
 
     def __init__(self) -> None:
         # 网络层级与宽度
-        self.n_layer: int = 12
-        self.n_embd: int = 768
+        self.n_layer: int = 32
+        self.n_embd: int = 2560
 
         # Attention & FFN 维度
         self.dim_att: int = 0  # 0 表示与 n_embd 相同

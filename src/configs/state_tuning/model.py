@@ -12,8 +12,8 @@ class ModelConfig:
 
     def __init__(self) -> None:
         # 网络层级与宽度
-        self.n_layer: int = 12
-        self.n_embd: int = 768
+        self.n_layer: int = 24
+        self.n_embd: int = 2048
 
         # Attention & FFN 维度
         self.dim_att: int = 0  # 0 表示与 n_embd 相同
@@ -37,7 +37,7 @@ class ModelConfig:
 
         # 量化与运算后端
         self.quant: str = "none"  # 量化模式
-        self.op: str = "cuda"      # 后端算子实现 cuda / cpu
+        self.op: str = "fla"      # 后端算子实现 cuda / cpu
         self.fused_kernel: bool = False  # 是否启用 fla fused kernel
 
     def check(self):

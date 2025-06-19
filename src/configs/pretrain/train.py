@@ -16,14 +16,14 @@ class TrainConfig:
         self.random_seed: int = -1
 
         # 训练 epoch / step 控制
-        self.epoch_steps: int = 1000
-        self.epoch_count: int = 500
+        self.epoch_steps: int = 1
+        self.epoch_count: int = 3
         self.epoch_begin: int = 0
-        self.epoch_save: int = 5
+        self.epoch_save: int = 1
 
         # 批大小 & 并行设置
-        self.ctx_len: int = 4096
-        self.micro_bsz: int = 12
+        self.ctx_len: int = 512
+        self.micro_bsz: int = 4
         self.accelerator: str = "gpu"
         self.strategy: str = "auto"
         self.devices: int = 1
@@ -32,9 +32,9 @@ class TrainConfig:
         self.accumulate_grad_batches: int = 1
 
         # 优化器参数
-        self.lr_init: float = 6e-4
-        self.lr_final: float = 1e-5
-        self.warmup_steps: int = -1
+        self.lr_init: float = 3e-4
+        self.lr_final: float = 1e-4
+        self.warmup_steps: int = 0
         self.beta1: float = 0.9
         self.beta2: float = 0.99
         self.adam_eps: float = 1e-8
