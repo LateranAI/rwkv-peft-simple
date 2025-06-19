@@ -1,0 +1,6 @@
+-i https://pypi.org/simple
+ftfy
+lm-dataformat
+numpy
+tokenizers
+tqdm
