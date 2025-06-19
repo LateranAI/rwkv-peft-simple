@@ -96,7 +96,7 @@ class FileConfig:
         logger.info("✓ File config validation completed")
 
     def show(self):
-        logger.info(f"TrainConfig: {self.__dict__}")
+        logger.info(f"FileConfig: {self.__dict__}")
 
 
 

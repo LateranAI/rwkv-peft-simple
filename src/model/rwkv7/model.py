@@ -24,7 +24,8 @@ class RWKV7(nn.Module):
     @property
     def _use_infctx(self):
         """判断是否使用无限上下文模式"""
-        return os.environ.get("RWKV_TRAIN_TYPE") == 'infctx'
+        from src.configs.train import train_config
+        return train_config.train_type == 'infctx'
 
     def forward(self, *args, **kwargs):
         if self._use_infctx:
