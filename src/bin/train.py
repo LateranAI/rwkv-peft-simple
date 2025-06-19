@@ -5,9 +5,9 @@ import numpy as np
 import torch
 import lightning as pl
 from lightning import Trainer
-from src.configs.file import file_config
-from src.configs.model import model_config
-from src.configs.train import train_config
+from src.configs.configs import file_config
+from src.configs.configs import model_config
+from src.configs.configs import train_config
 from src.rwkvt.peft.peft_loading import load_peft_model
 from src.rwkvt.lightning_train.trainer import train_callback
 from src.datasets.dataset_pt import get_data_by_l_version
@@ -23,7 +23,6 @@ def main():
 
     file_config.check(); model_config.check(); train_config.check()
     file_config.show(); model_config.show(); train_config.show()
-
 
     train_config.my_timestamp = datetime.datetime.today().strftime("%Y-%m-%d-%H-%M-%S")
     train_config.real_bsz = int(train_config.num_nodes) * int(train_config.devices) * train_config.micro_bsz

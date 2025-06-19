@@ -6,8 +6,8 @@ from torch.utils.checkpoint import checkpoint as torch_checkpoint
 
 import math, gc, importlib
 import torch
-from src.configs.train import train_config
-from src.configs.model import model_config
+from src.configs.configs import train_config
+from src.configs.configs import model_config
 # torch._C._jit_set_profiling_executor(True)
 # torch._C._jit_set_profiling_mode(True)
 import torch.nn as nn

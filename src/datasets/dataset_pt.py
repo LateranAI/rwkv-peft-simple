@@ -15,8 +15,8 @@ from src.datasets.SFTdataset import sft_dataset
 from .mask import mask_fn_dict
 pipeline = PIPELINE('rwkv7', "rwkv_vocab_v20230424")
 
-from src.configs.train import train_config
-from src.configs.file import file_config
+from src.configs.configs import train_config
+from src.configs.configs import file_config
 
 
 def get_vocab_size() -> int:

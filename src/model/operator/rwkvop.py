@@ -1,8 +1,8 @@
 
 from einops import rearrange
 import math, gc, importlib
-from src.configs.model import model_config
-from src.configs.train import train_config
+from src.configs.configs import model_config
+from src.configs.configs import train_config
 import torch
 ########################################################################################################
 # CUDA Kernel

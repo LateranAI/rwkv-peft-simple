@@ -1,8 +1,8 @@
 import torch.nn as nn
 from src.rwkvt.infctx_module import *
 from src.rwkvt.peft.rwkvLinear import make_linear_ffn
-from src.configs.train import train_config
-from src.configs.model import model_config
+from src.configs.configs import train_config
+from src.configs.configs import model_config
 
 if model_config.fused_kernel:
     from rwkvfla.ops.rwkv7 import channel_mixing_rwkv7

@@ -4,9 +4,9 @@ from src.rwkvt.lightning_train.light_rwkv import RWKV
 from lightning_utilities.core.rank_zero import rank_zero_info
 from src.rwkvt.lightning_train.trainer import generate_init_weight
 from src.rwkvt.peft.rwkvLinear import LORA_CONFIG
-from src.configs.train import train_config
-from src.configs.file import file_config
-from src.configs.model import model_config
+from src.configs.configs import train_config
+from src.configs.configs import file_config
+from src.configs.configs import model_config
 
 def load_peft_model():
     args = train_config
