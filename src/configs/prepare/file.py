@@ -15,17 +15,17 @@ class FileConfig:
         self.wandb: str = ""
 
         # 训练输出 & 项目目录
-        self.proj_dir: str = "out"  # 与 --proj_dir 对应
+        self.proj_dir: str = "out/L6-D256-x070"  # 与 --proj_dir 对应
 
         # 数据相关
-        self.data_file: str = ""      # 与 --data_file 对应，数据集文件路径
-        self.data_type: str = "sft"  # 与 --data_type 对应，数据格式(txt/binidx/sft 等)
+        self.data_file: str = "/public/home/ssjxzkz/Datasets/lm/OptimalScale_ClimbLab/mmap/block_blm_data_device_0"      # 与 --data_file 对应，数据集文件路径
+        self.data_type: str = "binidx"  # 与 --data_type 对应，数据格式(txt/binidx/sft 等)
 
-        self.vocab_size: int = 0       # 与 --vocab_size，对应词表大小（存储于文件）
+        self.vocab_size: int = 256       # 与 --vocab_size，对应词表大小（存储于文件）
 
         self.my_exit: int = 99999999
-        self.my_exit_tokens: int = 0
-        self.magic_prime: int = 0
+        self.my_exit_tokens: int = 4994480372591
+        self.magic_prime: int = 1219355507
 
         # PEFT / LoRA / PISSA / DiSHA 等微调组件所需文件
         self.lora_load: str = ""       # LoRA 权重文件路径，--lora_config.lora_load

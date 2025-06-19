@@ -15,10 +15,10 @@ from src.configs.prepare.model import model_config as prepare_model_config
 # from src.configs.disha.train import train_config as disha_train_config
 # from src.configs.lora.train import train_config as lora_train_config
 # from src.configs.pissa.train import train_config as pissa_train_config
-# from src.configs.prepare.train import train_config as prepare_train_config
-from src.configs.pretrain.train import train_config as pretrain_train_config
+from src.configs.prepare.train import train_config as prepare_train_config
+# from src.configs.pretrain.train import train_config as pretrain_train_config
 # from src.configs.state_tuning.train import train_config as state_tuning_train_config
 
 file_config = prepare_file_config
 model_config = prepare_model_config
-train_config = pretrain_train_config
+train_config = prepare_train_config

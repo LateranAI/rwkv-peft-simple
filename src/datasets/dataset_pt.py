@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from lightning_utilities.core.rank_zero import rank_zero_info
 from .binidx import MMapIndexedDataset
 from rwkv.utils import PIPELINE
-from src.datasets.SFTdataset import sft_dataset
+from src.datasets.rwkv_sft import sft_dataset
 
 from .mask import mask_fn_dict
 pipeline = PIPELINE('rwkv7', "rwkv_vocab_v20230424")

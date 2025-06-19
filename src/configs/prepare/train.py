@@ -22,18 +22,18 @@ class TrainConfig:
         self.epoch_save: int = 1
 
         # 批大小 & 并行设置
-        self.ctx_len: int = 512
+        self.ctx_len: int = 4096
         self.micro_bsz: int = 16
         self.accelerator: str = "gpu"
-        self.strategy: str = "auto"
+        self.strategy: str = "deepspeed_stage_2"
         self.devices: int = 1
         self.num_nodes: int = 1
         self.precision: str = "bf16"  # fp32 / tf32 / fp16 / bf16
         self.accumulate_grad_batches: int = 1
 
         # 优化器参数
-        self.lr_init: float = 2e-5
-        self.lr_final: float = 2e-5
+        self.lr_init: float = 1e-5
+        self.lr_final: float = 1e-5
         self.warmup_steps: int = 0
         self.beta1: float = 0.9
         self.beta2: float = 0.99
