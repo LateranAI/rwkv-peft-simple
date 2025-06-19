@@ -1,12 +1,15 @@
 import os
 import torch
 from src.rwkvt.lightning_train.light_rwkv import RWKV
-from src.rwkvt.args_type import TrainingArgs
 from lightning_utilities.core.rank_zero import rank_zero_info
 from src.rwkvt.lightning_train.trainer import generate_init_weight
 from src.rwkvt.peft.rwkvLinear import LORA_CONFIG
+from src.configs.train import train_config
+from src.configs.file import file_config
+from src.configs.model import model_config
 
-def load_peft_model(args: TrainingArgs):
+def load_peft_model():
+    args = train_config
     freeze = False
     if args.peft == 'lora':
         assert args.lora_config['lora_r'] > 0, "LoRA should have its `r` > 0"
@@ -28,7 +31,7 @@ def load_peft_model(args: TrainingArgs):
     model = RWKV(args)
     print(model)
 
-    if os.environ["RWKV_TRAIN_TYPE"] == 'state':
+    if args.train_type == 'state':
         model.requires_grad_(False)
         freeze = True
         for name, module in model.named_modules():

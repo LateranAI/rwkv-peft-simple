@@ -1,3 +1,6 @@
+from loguru import logger
+
+
 class ModelConfig:
     """模型结构与超参数配置。
 
@@ -44,7 +47,7 @@ class ModelConfig:
             self.dim_ffn = int((self.n_embd * 3.5) // 32 * 32)
 
     def show(self):
-        logger.info(f"TrainConfig: {self.__dict__}")
+        logger.info(f"ModelConfig: {self.__dict__}")
 
 
 # 单例实例，供其他模块直接 import 使用
