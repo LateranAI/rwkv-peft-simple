@@ -8,8 +8,8 @@ from src.rwkvt.peft.rwkvLinear import make_linear_att
 from src.model.operator.rwkvop import RUN_CUDA_RWKV7g, RUN_RWKV7_STATE, RUN_RWKV7_INFCTX
 from torch.nn import functional as F
 
-from src.configs.configs import model_config
-from src.configs.configs import train_config
+from src.configs.model import model_config
+from src.configs.train import train_config
 
 if model_config.fused_kernel:
     from rwkvfla.ops.rwkv7 import fused_addcmul_rwkv7

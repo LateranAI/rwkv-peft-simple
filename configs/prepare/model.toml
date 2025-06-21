@@ -1,0 +1,17 @@
+n_layer = 6
+n_embd = 256
+dim_att = 0
+dim_ffn = 0
+pre_ffn = 0
+head_qk = 0
+tiny_att_dim = 0
+tiny_att_layer = -999
+head_size_a = 64
+head_size_divisor = 8
+my_pos_emb = 0
+my_ffn_shift = 1
+my_att_shift = 1
+dropout = 0.0
+quant = "none"
+op = "cuda"
+fused_kernel = false
