@@ -31,6 +31,9 @@ torch = [
 torchvision = [
   { index = "pytorch-cu126", marker = "platform_system != 'Darwin'" },
 ]
+torchaudio = [
+  { index = "pytorch-cu126", marker = "platform_system != 'Darwin'" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cu126"

@@ -1,8 +1,14 @@
 import os, math, time, datetime, subprocess
+from types import SimpleNamespace
+
 import torch
 from lightning_utilities.core.rank_zero import rank_zero_only
 import lightning as pl
 import json
+
+from src.configs.file import file_config
+from src.configs.model import model_config
+from src.configs.train import train_config
 from src.model.trick.lrs import wsd,cos_decay
 
 def my_save(args, trainer, dd, ff):
@@ -25,8 +31,9 @@ def my_save(args, trainer, dd, ff):
 class train_callback(pl.Callback):
     def __init__(self, args):
         super().__init__()
-        self.args = args
-        self.loss_file = os.path.join(args.proj_dir, "loss_data.json")
+        self.args = SimpleNamespace(**{**vars(model_config), **vars(train_config), **vars(file_config)})
+
+        self.loss_file = os.path.join(self.args.proj_dir, "loss_data.json")
         if os.path.exists(self.loss_file):
             os.remove(self.loss_file)
             
@@ -51,8 +58,6 @@ class train_callback(pl.Callback):
                 lr = wsd(args.lr_init, 0, real_step, args.epoch_steps//int(args.devices)//args.accumulate_grad_batches,warmup_steps=w_step)
             else:
                 lr = cos_decay(args.lr_init, args.lr_final, real_step, args.epoch_steps//int(args.devices)//args.accumulate_grad_batches)
-
-
 
         if args.weight_decay_final > 0:
             wd_now = args.weight_decay * math.exp(math.log(args.weight_decay_final / args.weight_decay) * progress)

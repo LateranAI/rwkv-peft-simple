@@ -11,6 +11,7 @@ from lightning import Trainer
 from src.configs.file import file_config, load_config as load_file_config
 from src.configs.model import model_config, load_config as load_model_config
 from src.configs.train import train_config, load_config as load_train_config
+from src.rwkvt.args_type import TrainingArgs
 from src.rwkvt.peft.peft_loading import load_peft_model
 from src.rwkvt.lightning_train.trainer import train_callback
 from src.datasets.dataset_pt import get_data_by_l_version
@@ -45,12 +46,12 @@ def main(config_dir: str):
         logger=False,
         callbacks=[train_callback(train_config)],
         max_epochs=train_config.epoch_count,
-        check_val_every_n_epoch=train_config.check_val_every_n_epoch,
-        num_sanity_val_steps=train_config.num_sanity_val_steps,
-        log_every_n_steps=train_config.log_every_n_steps,
-        enable_checkpointing=False,
-        accumulate_grad_batches=train_config.accumulate_grad_batches,
-        gradient_clip_val=train_config.gradient_clip_val,
+        check_val_every_n_epoch=TrainingArgs.check_val_every_n_epoch,
+        num_sanity_val_steps=TrainingArgs.num_sanity_val_steps,
+        log_every_n_steps=TrainingArgs.log_every_n_steps,
+        enable_checkpointing=TrainingArgs.enable_checkpointing,
+        accumulate_grad_batches=TrainingArgs.accumulate_grad_batches,
+        gradient_clip_val=TrainingArgs.gradient_clip_val,
     )
 
     train_data = get_data_by_l_version(trainer)

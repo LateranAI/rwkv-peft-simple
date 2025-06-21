@@ -29,7 +29,7 @@ class FileConfig:
     my_timestamp: str = field(default_factory=lambda: datetime.today().strftime("%Y-%m-%d-%H-%M-%S"))
     my_pile_prev_p: int | None = None
     load_model: str = ""
-    epoch_begin: int | None = None
+    epoch_begin: int = 0
 
     def check(self):
         """检查文件路径的有效性。"""

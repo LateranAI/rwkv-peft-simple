@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import tomllib
+from typing import Tuple
+
 import torch
 from loguru import logger
 from lightning import seed_everything
@@ -59,8 +61,11 @@ class TrainConfig:
     load_partial: int = 0
     quant: str = "none"
     real_bsz: int | None = None
+    betas: tuple[float, float] = ()
 
     def check(self):
+        self.betas = (self.beta1, self.beta2)
+
         if self.random_seed >= 0:
             logger.warning(f"GLOBAL SEED {self.random_seed} THIS WILL AFFECT MULTIGPU SAMPLING")
             seed_everything(self.random_seed)

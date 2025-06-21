@@ -1,6 +1,8 @@
 ########################################################################################################
 # The RWKV Language Model - https://github.com/BlinkDL/RWKV-LM
 ########################################################################################################
+from types import SimpleNamespace
+
 import torch.nn.functional as F
 
 import torch
@@ -8,11 +10,15 @@ import lightning as L
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from lightning_utilities.core.rank_zero import rank_zero_info
+from torchgen.native_function_generation import self_to_out_signature
+
 from .binidx import MMapIndexedDataset
 from rwkv.utils import PIPELINE
 from src.datasets.rwkv_sft import sft_dataset
 
 from .mask import mask_fn_dict
+from ..configs.model import model_config
+
 pipeline = PIPELINE('rwkv7', "rwkv_vocab_v20230424")
 
 from src.configs.train import train_config
@@ -46,17 +52,16 @@ class GlobalIndexManager:
 class MyDataModule(L.LightningDataModule):
     def __init__(self):
         super().__init__()
-        self.args = train_config
+        self.args = SimpleNamespace(**{**vars(model_config), **vars(train_config), **vars(file_config)})
         self.train_data = None
         
     def setup(self, stage=None):
         self.train_data = MyDataset()
-        train_config.vocab_size = self.train_data.vocab_size
         self.train_data.real_epoch = self.trainer.current_epoch
         self.train_data.rank = self.trainer.global_rank
         self.train_data.world_size = self.trainer.world_size
         self.train_data.setup(self.trainer.global_rank, self.trainer.world_size,
-                              int(train_config.devices), train_config.data_shuffle)
+                              int(self.args.devices), self.args.data_shuffle)
         
     def train_dataloader(self):
         # must set shuffle=False, persistent_workers=False (because worker is in another thread)
@@ -72,25 +77,24 @@ class MyDataModule(L.LightningDataModule):
 
 class MyDataset(Dataset):
     def __init__(self):
-        self.args = train_config
+        self.args = SimpleNamespace(**{**vars(model_config), **vars(train_config), **vars(file_config)})
+
         self.rank = 0
         self.real_epoch = 0
         self.world_size = 0
         self.index_manager = None
-        self.vocab_size = train_config.vocab_size
-        if train_config.data_type == "sft":
-            self.data = sft_dataset(train_config)
-        elif train_config.data_type == "jsonl":
+        self.vocab_size = self.args.vocab_size
+        if self.args.data_type == "sft":
+            self.data = sft_dataset(self.args)
+        elif self.args.data_type == "jsonl":
             import jsonlines
             with jsonlines.open(file_config.data_file) as file:
                 self.data = list(file)
 
-        elif train_config.data_type == "binidx":
+        elif self.args.data_type == "binidx":
             self.data = MMapIndexedDataset(file_config.data_file)
             self.data_size = len(self.data._bin_buffer) // self.data._index._dtype_size
             rank_zero_info(f"Data has {self.data_size} tokens.")
-
-
 
     def setup(self, rank, world_size, devices, shuffle):
         self.rank = rank
@@ -98,24 +102,22 @@ class MyDataset(Dataset):
         self.index_manager = GlobalIndexManager(rank=rank, device_num=devices, shuffle=shuffle)
     
     def __len__(self):
-        return train_config.epoch_steps * train_config.micro_bsz
+        return self.args.epoch_steps * self.args.micro_bsz
 
     def __getitem__(self, idx):
         idx = self.index_manager.get_next_idx(idx_t=idx) if self.index_manager else idx
-        args = train_config
+        args = self.args
         rank = self.rank
         epoch = self.real_epoch
         world_size = self.world_size
 
-
-        if train_config.data_type == "sft":
-
+        if args.data_type == "sft":
             inputs, labels, attn_mask = self.data[0][idx], self.data[1][idx], self.data[2][idx]
             labels= torch.roll(labels, shifts=-1, dims=-1)
 
             return inputs, labels, attn_mask
-        elif train_config.data_type == "jsonl":
-            ctx_len = train_config.ctx_len
+        elif args.data_type == "jsonl":
+            ctx_len = args.ctx_len
             req_len = ctx_len + 1
             ctx = self.data[idx]['text']
             token = torch.tensor(pipeline.encode(ctx))
@@ -134,24 +136,23 @@ class MyDataset(Dataset):
             y = label[1:]
 
         else:
-            ctx_len = train_config.ctx_len
+            ctx_len = args.ctx_len
             req_len = ctx_len + 1
             data = self.data
 
-
-            if train_config.data_type == "binidx":
-                if train_config.dataload == 'pad':
+            if args.data_type == "binidx":
+                if args.dataload == 'pad':
                     dix, min_len = data.pad(idx=idx, length=req_len)
-                elif train_config.dataload == 'only':
+                elif args.dataload == 'only':
                     dix = data.only(idx=idx, length=req_len).astype(int)
 
             x = torch.tensor(dix[:-1], dtype=torch.long)
             dix[min_len:] = -100
             y = torch.tensor(dix[1:], dtype=torch.long)
 
-        mask_fn = mask_fn_dict.get(train_config.loss_mask)
+        mask_fn = mask_fn_dict.get(args.loss_mask)
 
-        if mask_fn!=None:
+        if mask_fn is not None:
             t1 = pipeline.encode('User:')
             t2 = pipeline.encode('Assistant:')
             y = mask_fn(dix, t1, t2, min_len)
