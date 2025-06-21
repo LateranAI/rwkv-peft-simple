@@ -1,6 +1,6 @@
 """Operator router for RWKV7 backends."""
 
-from src.configs.configs import model_config
+from src.configs.model import model_config
 
 if model_config.op == 'fla':
     from .fla import RUN_CUDA_RWKV7g, RUN_RWKV7_STATE, RUN_RWKV7_INFCTX

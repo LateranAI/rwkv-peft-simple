@@ -7,7 +7,7 @@ import torch.nn as nn
 import deepspeed
 from src.rwkvt.infctx_module import BlockStateList
 from .block import Block
-from src.configs.configs import train_config
+from src.configs.train import train_config
 
 class RWKV7(nn.Module):
     def __init__(self, args):

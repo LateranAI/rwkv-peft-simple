@@ -1,4 +1,5 @@
-from src.configs.configs import model_config, train_config
+from src.configs.model import model_config
+from src.configs.train import train_config
 import torch
 
 # default placeholders

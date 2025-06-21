@@ -60,7 +60,7 @@ class TOKENIZER():
         else:
             top_p = top_p_usual
 
-        from src.configs.configs import train_config
+        from src.configs.train import train_config
         if train_config.accelerator == "cpu":
             probs = probs.numpy()
             sorted_probs = np.sort(probs)[::-1]

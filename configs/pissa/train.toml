@@ -1,0 +1,66 @@
+random_seed = -1
+epoch_steps = 1000
+epoch_count = 1
+epoch_begin = 0
+epoch_save = 1
+ctx_len = 512
+micro_bsz = 8
+accelerator = "gpu"
+strategy = "auto"
+devices = 1
+num_nodes = 1
+precision = "bf16"
+accumulate_grad_batches = 1
+lr_init = 2e-5
+lr_final = 2e-5
+warmup_steps = 0
+beta1 = 0.9
+beta2 = 0.99
+adam_eps = 1e-8
+weight_decay = 0.0
+weight_decay_final = -1.0
+grad_cp = 0
+layerwise_lr = 1
+optim = "none"
+lr_schedule = "cos"
+gradient_clip_val = 1.0
+peft = "none"
+train_parts = [ "time", "ln",]
+dataload = "pad"
+chunk_ctx = 512
+loss_mask = "pad"
+data_shuffle = 1
+avg_loss = 0
+sft_split = "train"
+ds_bucket_mb = 200
+my_sample_len = 0
+my_qa_mask = 0
+my_random_steps = 0
+my_ffn_shift = 1
+my_att_shift = 1
+my_testing = "x052"
+fla = false
+train_type = "none"
+load_partial = 0
+quant = "none"
+
+[lora_config]
+lora_load = ""
+lora_r = 8
+lora_alpha = 32
+lora_dropout = 0.01
+
+[pissa_config]
+pissa_load = ""
+pissa_init = ""
+pissa_r = 32
+svd_niter = 4
+
+[disha_config]
+mode = "mode"
+load = ""
+r = 64
+
+[mask_id]
+mask0 = "0"
+mask1 = "1"
