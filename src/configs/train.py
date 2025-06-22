@@ -55,7 +55,7 @@ class TrainConfig:
     my_random_steps: int = 0
     my_ffn_shift: int = 0
     my_att_shift: int = 0
-    my_testing: str = ""
+    my_testing: str = "x070"
     fla: bool = False
     train_type: str = "none"
     load_partial: int = 0
