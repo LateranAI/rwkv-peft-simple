@@ -1,6 +1,8 @@
 ########################################################################################################
 # The RWKV Language Model - https://github.com/BlinkDL/RWKV-LM
 ########################################################################################################
+import os
+
 from torch.utils.checkpoint import checkpoint as torch_checkpoint
 #from adam_mini import Adam_mini
 
@@ -13,9 +15,11 @@ from src.configs.model import model_config
 import torch.nn as nn
 import lightning as pl
 from lightning.pytorch.strategies import DeepSpeedStrategy
+
+from src.training_loop.state import BlockStateList
+
 if importlib.util.find_spec('deepspeed'):
     from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
-from src.rwkvt.infctx_module import BlockStateList
 
 
 print('RWKV_MY_TESTING', train_config.my_testing)

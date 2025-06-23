@@ -1,6 +1,6 @@
 import torch.nn as nn
-from src.rwkvt.infctx_module import *
-from src.rwkvt.peft.rwkvLinear import make_linear_ffn
+from src.training_loop.infctx_module import *
+from src.model.peft.linear import make_linear_ffn
 from src.configs.train import train_config
 from src.configs.model import model_config
 

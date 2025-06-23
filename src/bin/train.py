@@ -1,19 +1,16 @@
 import os
-import os
 import sys
 import warnings
 import datetime
 import numpy as np
-import torch
-import lightning as pl
 from lightning import Trainer
 
 from src.configs.file import file_config, load_config as load_file_config
 from src.configs.model import model_config, load_config as load_model_config
 from src.configs.train import train_config, load_config as load_train_config
-from src.rwkvt.args_type import TrainingArgs
-from src.rwkvt.peft.peft_loading import load_peft_model
-from src.rwkvt.lightning_train.trainer import train_callback
+from src.training_loop.args_type import TrainingArgs
+from src.model.peft.peft_loading import load_peft_model
+from src.training_loop.trainer import train_callback
 from src.datasets.dataset_pt import get_data_by_l_version
 
 
@@ -23,7 +20,7 @@ def main(config_dir: str):
     load_train_config(os.path.join(config_dir, "train.toml"))
 
     if "deepspeed" in train_config.strategy:
-        import deepspeed
+        pass
 
     np.set_printoptions(precision=4, suppress=True, linewidth=200)
     warnings.filterwarnings("ignore", ".*Consider increasing the value of the `num_workers` argument*")

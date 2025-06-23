@@ -2,10 +2,10 @@ import os
 from types import SimpleNamespace
 
 import torch
-from src.rwkvt.lightning_train.light_rwkv import RWKV
+from src.training_loop.light_rwkv import RWKV
 from lightning_utilities.core.rank_zero import rank_zero_info
-from src.rwkvt.lightning_train.trainer import generate_init_weight
-from src.rwkvt.peft.rwkvLinear import LORA_CONFIG
+from src.training_loop.trainer import generate_init_weight
+from src.model.peft.linear import LORA_CONFIG
 from src.configs.train import train_config
 from src.configs.file import file_config
 from src.configs.model import model_config
@@ -27,7 +27,7 @@ def load_peft_model():
     if args.quant != 'none':
         LORA_CONFIG["quant"] = True
     if args.peft == 'disha':
-        from src.rwkvt.peft.rwkvLinear import DiSHA_CONFIG
+        from src.model.peft.linear import DiSHA_CONFIG
         DiSHA_CONFIG["mode"] = args.disha_config['mode']
         DiSHA_CONFIG["r"] = args.disha_config['r']
 

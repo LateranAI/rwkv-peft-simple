@@ -2,9 +2,9 @@
 import math
 
 import torch.nn as nn
-from src.rwkvt.infctx_module import *
+from src.training_loop.infctx_module import *
 
-from src.rwkvt.peft.rwkvLinear import make_linear_att
+from src.model.peft.linear import make_linear_att
 from src.model.operator.rwkvop import RUN_CUDA_RWKV7g, RUN_RWKV7_STATE, RUN_RWKV7_INFCTX
 from torch.nn import functional as F
 

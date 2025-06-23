@@ -1,7 +1,7 @@
 import torch.nn as nn
 from .ffn import RWKV_Cmix_v7
 from .att import RWKV_Tmix_v7
-from src.rwkvt.infctx_module import BlockState
+from src.training_loop.infctx_module import BlockState
 from src.configs.train import train_config
 class Block(nn.Module):
     def __init__(self, args, layer_id):
