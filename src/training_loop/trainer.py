@@ -94,7 +94,7 @@ class train_callback(pl.Callback):
                     import wandb
                     wandb.init(
                         project=args.wandb,
-                        name=args.run_name + " " + args.my_timestamp,
+                        name=f"{args.vocab_size} ctx{args.ctx_len} L{args.n_layer} D{args.n_embd}" + " " + args.my_timestamp,
                         config=args,
                         save_code=False,
                     )
