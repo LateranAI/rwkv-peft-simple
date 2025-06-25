@@ -1,5 +1,5 @@
 import torch.nn as nn
-from src.training_loop.infctx_module import *
+from src.training_loop.state import *
 from src.model.peft.linear import make_linear_ffn
 from src.configs.train import train_config
 from src.configs.model import model_config

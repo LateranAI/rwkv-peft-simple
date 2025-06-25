@@ -1,9 +1,16 @@
 import os
 import sys
 import warnings
-import datetime
+
+import deepspeed
+import pytorch_lightning
+import torch
+from loguru import logger
+from types import SimpleNamespace
+
 import numpy as np
 from lightning import Trainer
+from lightning_utilities.core.rank_zero import rank_zero_only
 
 from src.configs.file import file_config, load_config as load_file_config
 from src.configs.model import model_config, load_config as load_model_config
@@ -12,6 +19,36 @@ from src.training_loop.args_type import TrainingArgs
 from src.model.peft.peft_loading import load_peft_model
 from src.training_loop.trainer import train_callback
 from src.datasets.dataset_pt import get_data_by_l_version
+
+
+@rank_zero_only
+def show_configs():
+    args = SimpleNamespace(**{**vars(model_config), **vars(train_config), **vars(file_config)})
+    logger.info(
+        f"""
+    ############################################################################
+    #
+    # RWKV-7 {str(args.precision).upper()} on {args.num_nodes}x{args.devices} {args.accelerator.upper()}, bsz {args.num_nodes}x{args.devices}x{args.micro_bsz}={args.real_bsz}, {args.strategy} {'with grad_cp' if args.grad_cp > 0 else ''}
+    #
+    # Data = {file_config.data_file} ({file_config.data_type}), ProjDir = {file_config.proj_dir}
+    #
+    # Epoch = {args.epoch_begin} to {args.epoch_begin + args.epoch_count - 1} (will continue afterwards), save every {args.epoch_save} epoch
+    #
+    # Each "epoch" = {args.epoch_steps} steps, {args.epoch_steps * args.real_bsz} samples, {args.epoch_steps * args.real_bsz * args.ctx_len} tokens
+    #
+    # Model = {model_config.n_layer} n_layer, {model_config.n_embd} n_embd, {args.ctx_len} ctx_len
+    #
+    # Adam = lr {args.lr_init} to {args.lr_final}, warmup {args.warmup_steps} steps, beta {args.betas}, eps {args.adam_eps}
+    #
+    # Found torch {torch.__version__}, recommend latest torch
+    # Found deepspeed {deepspeed.__version__}, recommend latest deepspeed
+    # Found pytorch_lightning {pytorch_lightning.__version__}, recommend 1.9.5
+    #
+    ############################################################################
+    """
+
+    )
+
 
 
 def main(config_dir: str):
@@ -26,13 +63,13 @@ def main(config_dir: str):
     warnings.filterwarnings("ignore", ".*Consider increasing the value of the `num_workers` argument*")
     warnings.filterwarnings("ignore", ".*The progress bar already tracks a metric with the*")
 
-    file_config.check(); model_config.check(); train_config.check()
-    file_config.show(); model_config.show(); train_config.show()
+    file_config.check()
+    model_config.check()
+    train_config.check()
 
-    train_config.my_timestamp = datetime.datetime.today().strftime("%Y-%m-%d-%H-%M-%S")
-    train_config.real_bsz = int(train_config.num_nodes) * int(train_config.devices) * train_config.micro_bsz
+    show_configs()
 
-    args, model = load_peft_model()
+    _args, model = load_peft_model()
 
     trainer = Trainer(
         accelerator=train_config.accelerator,
@@ -53,7 +90,6 @@ def main(config_dir: str):
 
     train_data = get_data_by_l_version(trainer)
     trainer.fit(model, train_data)
-
 
 if __name__ == "__main__":
     config_root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "../../configs/prepare")

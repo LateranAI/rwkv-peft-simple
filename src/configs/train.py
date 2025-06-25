@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import tomllib
+import datetime
 from typing import Tuple
 
 import torch
@@ -90,6 +91,8 @@ class TrainConfig:
             self.precision = 16
         else:
             self.precision = "bf16"
+
+        train_config.my_timestamp = datetime.datetime.today().strftime("%Y-%m-%d-%H-%M-%S")
 
     def show(self):
         logger.info(f"TrainConfig: {self.__dict__}")

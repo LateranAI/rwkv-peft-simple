@@ -5,7 +5,7 @@ from torch.utils.checkpoint import checkpoint as torch_checkpoint
 import torch
 import torch.nn as nn
 import deepspeed
-from src.training_loop.infctx_module import BlockStateList
+from src.training_loop.state import BlockStateList
 from .block import Block
 from src.configs.train import train_config
 
@@ -33,6 +33,7 @@ class RWKV7(nn.Module):
 
     def forward_normal(self, idx, attention_mask = None):
         args = self.args
+
         B, T = idx.size()
         assert T <= args.ctx_len, "Cannot forward, model ctx_len is exhausted."
 

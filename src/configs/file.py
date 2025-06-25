@@ -36,11 +36,14 @@ class FileConfig:
         if not os.path.exists(self.proj_dir):
             os.makedirs(self.proj_dir)
 
-        if self.model_path and not os.path.exists(self.model_path):
-            logger.warning(f"Model file not found: {self.model_path}")
+        # if self.model_path and not os.path.exists(self.model_path):
+        #     logger.warning(f"Model file not found: {self.model_path}")
 
-        if self.data_file and not os.path.exists(self.data_file):
-            logger.warning(f"Data file not found: {self.data_file}")
+        if self.data_file:
+            if not os.path.exists(f"{self.data_file}.bin"):
+                logger.warning(f"Data bin file not found: {self.data_file}.bin")
+            if not os.path.exists(f"{self.data_file}.idx"):
+                logger.warning(f"Data idx file not found: {self.data_file}.idx")
 
         if self.my_pile_stage >= 2:  # find latest saved model
             list_p = []

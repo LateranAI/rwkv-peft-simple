@@ -121,6 +121,7 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
                 elif self._version == 2:
 
                     (token_unit_type_code,) = struct.unpack("<B", stream.read(1))
+                    self.token_unit_type_code = token_unit_type_code
 
                     self._token_unit_len = struct.unpack("<I", stream.read(4))[0]
                     if self._token_unit_len == 0:
@@ -232,6 +233,7 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
     def _do_init(self, path, skip_warmup):
         self._path = path
         self._index = self.Index(index_file_path(self._path), skip_warmup)
+        self.token_unit_type_code = self._index.token_unit_type_code
 
         if not skip_warmup:
             print_rank_0("    warming up data mmap file...")
@@ -382,7 +384,7 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
             offset=start_read_byte_offset
         )
 
-        return np_array_flat.reshape(num_logical_tokens_to_read, token_unit_len)
+        return np_array_flat.reshape(num_logical_tokens_to_read, token_unit_len).squeeze().astype(float) if self.token_unit_type_code == 2 else np_array_flat.reshape(num_logical_tokens_to_read, token_unit_len).squeeze().astype(int)
 
     def pad(self, idx, length=None):
         ptr, size = self._index[idx]
