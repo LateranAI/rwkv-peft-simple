@@ -49,29 +49,50 @@ class train_callback(pl.Callback):
         #     torch.cuda.empty_cache()
         real_step = trainer.global_step + args.epoch_begin * args.epoch_steps
 
-        # LR schedule
         w_step = args.warmup_steps
-        if args.lr_final == args.lr_init or args.epoch_count == 0:
-            lr = args.lr_init
-        else:
-            if 'wsd' == args.lr_schedule:
-                lr = wsd(args.lr_init, 0, real_step, args.epoch_steps//int(args.devices)//args.accumulate_grad_batches,warmup_steps=w_step)
-            else:
-                lr = cos_decay(args.lr_init, args.lr_final, real_step, args.epoch_steps//int(args.devices)//args.accumulate_grad_batches)
+        lr = args.lr_init
 
-        if args.weight_decay_final > 0:
-            wd_now = args.weight_decay * math.exp(math.log(args.weight_decay_final / args.weight_decay) * progress)
-        else:
-            wd_now = args.weight_decay
+        token_per_step = args.ctx_len * args.real_bsz
+
+        if args.my_exit_tokens != 0:
+            target_tokens = abs(args.my_exit_tokens)
+            warmup_tokens = max(0, w_step * token_per_step)
+
+            total_steps_eff = max(1, (target_tokens - warmup_tokens) // token_per_step)
+
+            if args.lr_schedule == 'wsd':
+                lr_tmp = wsd(args.lr_init, args.lr_final,
+                              current_step=real_step,
+                              total_steps=total_steps_eff,
+                              warmup_steps=w_step)
+            else:
+                lr_tmp = cos_decay(args.lr_init, args.lr_final,
+                                   current_step=real_step,
+                                   total_steps=total_steps_eff)
+
+            if args.my_exit_tokens > 0:
+                lr = lr_tmp
+            else:
+                lr = (lr + lr_tmp) / 2
+
+            real_tokens = real_step * token_per_step
+            if real_tokens - warmup_tokens >= target_tokens:
+                if (trainer.is_global_zero) or ('deepspeed_stage_3' in args.strategy):
+                    final_path = f"{args.proj_dir}/rwkv-final.pth"
+                    my_save(args, trainer, pl_module.state_dict(), final_path)
+                    print(f"\n✅ End of training. Model saved to: {final_path}\n")
+                exit(0)
+
+        elif w_step > 0 and trainer.global_step < w_step:
+            lr = args.lr_init * (0.01 + 0.99 * trainer.global_step / w_step)
+
+        wd_now = args.weight_decay
 
         for param_group in trainer.optimizers[0].param_groups:
             if param_group["weight_decay"] > 0:
                 param_group["weight_decay"] = wd_now
-            if args.layerwise_lr > 0:
-                param_group["lr"] = lr * param_group["my_lr_scale"]
-                # print(param_group["lr"], param_group["my_lr_scale"])
-            else:
-                param_group["lr"] = lr
+
+            param_group["lr"] = lr * param_group["my_lr_scale"]
 
         trainer.my_lr = lr
         trainer.my_wd = wd_now
