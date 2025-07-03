@@ -2,6 +2,24 @@ import os
 import sys
 import warnings
 
+# Set a unique triton cache dir for each rank to avoid race conditions
+# Try to find a rank identifier from common environment variables
+rank_keys = ["PL_GLOBAL_RANK", "RANK", "LOCAL_RANK", "SLURM_PROCID", "OMPI_COMM_WORLD_RANK"]
+rank = None
+for key in rank_keys:
+    if key in os.environ:
+        rank = os.environ[key]
+        break
+
+# Set a unique triton cache dir for each rank if a rank is found
+if rank is not None:
+    user = os.environ.get("USER", "user")
+    pid = os.getpid()
+    # Using /tmp is generally safer for multi-node, shared-filesystem setups
+    cache_dir = f"/tmp/triton_{user}_rank_{rank}_pid_{pid}"
+    os.environ["TRITON_CACHE_DIR"] = cache_dir
+    os.makedirs(cache_dir, exist_ok=True)
+
 import deepspeed
 import pytorch_lightning
 import torch
@@ -16,7 +34,6 @@ from src.configs.file import file_config, load_config as load_file_config
 from src.configs.model import model_config, load_config as load_model_config
 from src.configs.train import train_config, load_config as load_train_config
 from src.training_loop.args_type import TrainingArgs
-from src.model.peft.peft_loading import load_peft_model
 from src.training_loop.trainer import train_callback
 from src.datasets.dataset_pt import get_data_by_l_version
 
@@ -55,6 +72,8 @@ def main(config_dir: str):
     load_file_config(os.path.join(config_dir, "file.toml"))
     load_model_config(os.path.join(config_dir, "model.toml"))
     load_train_config(os.path.join(config_dir, "train.toml"))
+
+    from src.model.peft.peft_loading import load_peft_model
 
     if "deepspeed" in train_config.strategy:
         pass

@@ -1,8 +1,7 @@
-
 import math
 
 import torch.nn as nn
-from src.training_loop.state import *
+from src.model.state import *
 
 from src.model.peft.linear import make_linear_att
 from src.model.operator.rwkvop import RUN_CUDA_RWKV7g, RUN_RWKV7_STATE, RUN_RWKV7_INFCTX
@@ -22,7 +21,7 @@ def RWKV_Tmix_v7(*args, **kwargs):
     
     if train_config.train_type == 'state':
         return RWKV_Tmix_x070_State(*args, **kwargs)
-    elif train_config.train_type == 'infctx':
+    elif train_config.train_type == 'infctx' or train_config.train_type in ['sd_only_state', 'sd_both']:
         return RWKV_Tmix_x070_infctx(*args, **kwargs)
     else:
         return RWKV_Tmix_x070(*args, **kwargs)
@@ -47,7 +46,11 @@ class RWKV_Tmix_x070(nn.Module):
             self.addcmul_kernel = self.torch_addcmul
 
         with torch.no_grad():
-            ratio_0_to_1 = layer_id / (args.n_layer - 1)  # 0 to 1
+            # 针对单层模型 (args.n_layer == 1) 需避免除零错误，此时将比率视为 0
+            if args.n_layer > 1:
+                ratio_0_to_1 = layer_id / (args.n_layer - 1)  # 0 到 1
+            else:
+                ratio_0_to_1 = 0.0
             ratio_1_to_almost0 = 1.0 - (layer_id / args.n_layer)  # 1 to ~0
             ddd = torch.ones(1, 1, C)
             for i in range(C):

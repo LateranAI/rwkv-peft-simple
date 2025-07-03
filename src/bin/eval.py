@@ -5,9 +5,11 @@ import torch
 from torch.utils.data import DataLoader
 from matplotlib import pyplot as plt
 import codecs
+import csv
+import torch.nn.functional as F
 
-from src.datasets.dataset import MyDataset
-from src.model.rwkv_eval_mode import RWKV_x070
+from src.datasets.dataset_pt import MyDataset
+from src.infering_loop.inferer import RWKV_x070
 
 # --- Constants for UTF-8 processing in plot annotations ---
 UTF8_PADDING_CHAR = '↳'  # U+21B3 Downwards Arrow with Tip Rightwards
@@ -96,66 +98,147 @@ def generate_byte_aligned_labels(byte_list: list[int]) -> list[str]:
 
 def main(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    data = MyDataset(args)
-    data.global_rank = 0
-    args.vocab_size = data.vocab_size
+
+    # --------------------------------------------------------------
+    # 加载字节全局频率表，并构造权重张量 w(x) = (f(x)/f_max)^freq_alpha
+    # --------------------------------------------------------------
+    freq_csv_path = os.path.join("assets", "byte_freq.csv")
+    freq_arr = np.zeros(256, dtype=np.float64)
+    if os.path.isfile(freq_csv_path):
+        with open(freq_csv_path, newline="", encoding="utf-8") as f_csv:
+            reader = csv.reader(f_csv)
+            for row in reader:
+                if not row:
+                    continue
+                try:
+                    byte_id = int(row[0])
+                    freq_val = float(row[1])
+                    if 0 <= byte_id < 256:
+                        freq_arr[byte_id] = freq_val
+                except Exception:
+                    # 跳过格式错误行
+                    pass
+
+    f_max = float(freq_arr.max()) if freq_arr.max() > 0 else 1.0
+    freq_normalized = freq_arr / f_max  # 归一化到 [0,1]
+    # 转为张量，置于同一设备以避免频繁拷贝
+    freq_tensor = torch.tensor(freq_normalized, dtype=torch.float32, device=device)
+
+    # 超参数：freq_alpha 控制对低频 token 的抑制程度, ctx_window 为上下文窗口半径
+    freq_alpha = args.freq_alpha
+    ctx_window = args.ctx_window
+    eps_const = 1e-6
+
+    # ------------------------------------------------------------------
+    # 1. 读取评估文件并拆分为若干段 (每段长度 <= ctx_len+1 字节)
+    # ------------------------------------------------------------------
+    eval_file_path = getattr(args, "eval_file", os.path.join("assets", "ddn.md"))
+    with open(eval_file_path, "rb") as f:
+        file_bytes = list(f.read())  # List[int]
+
+    if len(file_bytes) < 2:
+        print(f"[ERROR] 评估文件 {eval_file_path} 过短(<2 bytes)，无法计算 NLL！")
+        return
+
+    print(f"已从 {eval_file_path} 读取 {len(file_bytes)} 字节，用于评估。")
+
+    ctx_len = args.ctx_len
+    segments: list[list[int]] = []
+    pos = 0
+    while pos + 2 <= len(file_bytes) and len(segments) < args.num_samples_to_eval:
+        end_pos = min(pos + ctx_len + 1, len(file_bytes))
+        seg = file_bytes[pos:end_pos]
+        if len(seg) >= 2:
+            segments.append(seg)
+        # 保留一个字节的重叠，避免跳过目标 token
+        pos = end_pos - 1
+        break
+
+    # ------------------------------------------------------------------
+    # 2. 执行前向推理并计算每段的 NLL
+    # ------------------------------------------------------------------
+    args.vocab_size = 256  # 字节范围固定为 0-255
     model = RWKV_x070(args)
-    eval_loader = DataLoader(data, batch_size=1, shuffle=False, num_workers=0, pin_memory=True)
     model.eval()
-    
-    all_nlls_per_sample = []
-    all_cleaned_tokens_per_sample = []  # Store cleaned tokens for each sample
-    
-    print(f"Starting evaluation for {args.num_samples_to_eval} samples...")
+
+    # 各类困惑度序列收集器
+    all_scores_final: list[list[float]] = []
+    all_scores_no_freq: list[list[float]] = []
+    all_scores_no_ctx: list[list[float]] = []
+    all_scores_raw: list[list[float]] = []
+    all_cleaned_tokens_per_sample: list[list[int]] = []
+
+    print(f"开始评估，共 {len(segments)} 段……")
     with torch.no_grad():
-        for i, batch in enumerate(eval_loader):
-            if i >= args.num_samples_to_eval:
-                break
-            idx, targets_from_batch = batch
-            if i == 0:  # Print shape only for the first batch
-                print("targets_from_batch shape:", targets_from_batch.shape)
+        for i, seg in enumerate(segments):
+            input_tokens = seg[:-1]   # 模型输入
+            target_tokens = seg[1:]   # 预测目标
 
-            idx = idx.squeeze().cpu().detach().numpy().tolist()
-            logits, _ = model(idx, None, True)
+            logits, _ = model(input_tokens, None, True)  # (T, vocab)
             probs = torch.softmax(logits.float(), dim=-1)
-            
-            current_sample_nlls = []
-            
-            # 1. Prepare and clean current_sample_token_ids_y
-            raw_token_ids_y = targets_from_batch.cpu().view(-1).tolist()
-            cleaned_token_ids_for_sample = []
-            for tid_val in raw_token_ids_y:
-                if isinstance(tid_val, int) and 0 <= tid_val <= 255:
-                    cleaned_token_ids_for_sample.append(tid_val)
-                else:
-                    cleaned_token_ids_for_sample.append(255)  # Replace with a default byte value
-            
-            targets_for_nll = targets_from_batch.to(device).squeeze()
-            if targets_for_nll.ndim > 1:
-                targets_for_nll = targets_for_nll.view(-1)
 
-            # Calculate NLLs - ensure lengths match
-            min_len = min(probs.shape[0], len(cleaned_token_ids_for_sample), targets_for_nll.shape[0])
-            if probs.shape[0] != len(cleaned_token_ids_for_sample):
-                print(f"Warning: Length mismatch for sample {i+1}. Probs: {probs.shape[0]}, Cleaned tokens: {len(cleaned_token_ids_for_sample)}. Using {min_len}.")
-
-            for t in range(min_len):
-                original_target_token_id_for_nll = targets_for_nll[t].item()
-                prob_of_target = probs[t, original_target_token_id_for_nll]
-                nll = -torch.log(prob_of_target + 1e-9).item()
-                current_sample_nlls.append(nll)
-
-            # Store both NLLs and cleaned tokens for this sample
-            all_nlls_per_sample.append(current_sample_nlls)
-            all_cleaned_tokens_per_sample.append(cleaned_token_ids_for_sample[:min_len])  # Match NLL length
+            targets_tensor = torch.tensor(target_tokens, device=probs.device, dtype=torch.long)
             
-            if (i + 1) % 1 == 0:
-                print(f"Processed sample {i + 1}/{args.num_samples_to_eval}")
+            # ----------------------------------------------------------
+            # 1) 原始困惑度 s_i = -log p(x_i)
+            # ----------------------------------------------------------
+            prob_of_target = probs[torch.arange(len(target_tokens)), targets_tensor]
+            s_i_tensor = -torch.log(prob_of_target + 1e-9)
+
+            # ----------------------------------------------------------
+            # 2) 计算每步预测分布熵 H_j
+            # ----------------------------------------------------------
+            entropies_tensor = -(probs * torch.log(probs + 1e-9)).sum(dim=-1)  # (T,)
+
+            # 3) 计算滑动窗口平均熵 \bar{H}_{ctx}(i)
+            kernel_size = 2 * ctx_window + 1
+            kernel = torch.ones(1, 1, kernel_size, device=entropies_tensor.device) / float(kernel_size)
+            ent_padded = F.pad(entropies_tensor.unsqueeze(0).unsqueeze(0), (ctx_window, ctx_window), mode="replicate")
+            ctx_mean_entropy = F.conv1d(ent_padded, kernel).squeeze()  # (T,)
+
+            # 4) 频率修正权重 w(x_i)
+            w_tensor = torch.pow(freq_tensor[targets_tensor] + eps_const, freq_alpha)  # (T,)
+
+            # 5) 最终困惑度 s_i^{final}
+            s_final_tensor = w_tensor * s_i_tensor / (ctx_mean_entropy + eps_const)
+
+            # 消融：无频率修正
+            s_no_freq_tensor = s_i_tensor / (ctx_mean_entropy + eps_const)
+            # 消融：无上下文归一化
+            s_no_ctx_tensor = w_tensor * s_i_tensor
+            # 原始困惑度
+            s_raw_tensor = s_i_tensor
+
+            # 收集到 CPU list 方便后续绘图
+            all_scores_final.append(s_final_tensor.cpu().tolist())
+            all_scores_no_freq.append(s_no_freq_tensor.cpu().tolist())
+            all_scores_no_ctx.append(s_no_ctx_tensor.cpu().tolist())
+            all_scores_raw.append(s_raw_tensor.cpu().tolist())
+
+            all_cleaned_tokens_per_sample.append(target_tokens)  # token 本身即为 label
+
+            print(f"已处理段 {i + 1}/{len(segments)} (长度={len(target_tokens)})")
+
+    # ----- 定义阈值列表及其对应颜色 (用于分块边界可视化) -----
+    threshold_list = getattr(args, "scan_thresholds", [8.0, 16.0, 32.0, 64.0, 128.0])
+    _base_colors = ["red", "green", "orange", "purple", "brown", "cyan", "magenta", "gray", "olive", "pink"]
+    threshold_colors = _base_colors[: len(threshold_list)]
+
+    def calc_boundaries(score_seq: list[float], T: float):
+        """累积值达到阈值 T 时记为一次边界，返回所有边界的索引。"""
+        bounds = []
+        acc = 0.0
+        for idx, val in enumerate(score_seq):
+            acc += val
+            if acc >= T:
+                bounds.append(idx)
+                acc = 0.0
+        return bounds
 
     # Now generate plots for each sample OUTSIDE the evaluation loop
     print("Starting to generate charts...")
-    for i in range(min(len(all_nlls_per_sample), 5)):
-        current_sample_nlls_plot = all_nlls_per_sample[i]
+    for i in range(min(len(all_scores_final), 5)):
+        current_sample_nlls_plot = all_scores_final[i]
         corresponding_cleaned_tokens = all_cleaned_tokens_per_sample[i]
         
         # 2. Generate byte-aligned labels for plot annotations
@@ -196,8 +279,18 @@ def main(args):
         # print(f"DEBUG: Label stats - Total: {len(plot_labels_for_nlls)}, Non-empty: {sum(1 for l in plot_labels_for_nlls if l and l.strip())}")
         
         # --- Determine plot strategy based on label readability ---
-        nlls_to_plot_main = current_sample_nlls_plot
+        # 需要绘制的三种序列
+        variants_plot = [
+            ("final", all_scores_final[i], "dodgerblue"),
+            ("no_freq", all_scores_no_freq[i], "darkorange"),
+            ("no_ctx", all_scores_no_ctx[i], "seagreen"),
+        ]
+
+        nlls_to_plot_main = variants_plot[0][1]  # 用 final 序列确定阈值 & labels
         labels_to_plot_main = plot_labels_for_nlls
+
+        # 计算整段序列下各阈值的边界位置
+        bounds_by_threshold = {T: calc_boundaries(nlls_to_plot_main, T) for T in threshold_list}
 
         if len(nlls_to_plot_main) <= MAX_LABELS_PER_SUBPLOT:
             # Strategy 1: Short sequence that can display all labels clearly
@@ -205,7 +298,9 @@ def main(args):
             plot_width = 17
             current_fig = plt.figure(figsize=(plot_width, 7))
             ax_main = plt.gca()
-            ax_main.plot(nlls_to_plot_main, marker='o', linestyle='-', markersize=3, color='dodgerblue', linewidth=1)
+            # 绘制三条曲线
+            for name, seq, color in variants_plot:
+                ax_main.plot(seq, linestyle='-', linewidth=1, color=color, label=name)
             ax_main.set_title(f"NLL per Token for Sample {i + 1} (Mean NLL: {np.mean(nlls_to_plot_main):.2f})", fontsize=14)
             
             # Set x-axis labels using byte-aligned text
@@ -220,6 +315,14 @@ def main(args):
             ax_main.set_ylabel("NLL (Proxy for Entropy)", fontsize=12)
             ax_main.set_xlabel("Token Index / Character", fontsize=12)
             ax_main.grid(True, linestyle=':', alpha=0.6)
+
+            # 绘制阈值分块边界（虚线）
+            for idx_T, T in enumerate(threshold_list):
+                _color = threshold_colors[idx_T % len(threshold_colors)]
+                for k, b_idx in enumerate(bounds_by_threshold[T]):
+                    ax_main.axvline(x=b_idx, color=_color, linestyle='--', linewidth=1, alpha=0.8,
+                                    label=f"T={T}" if k == 0 else None)
+            ax_main.legend()
             current_fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
         else: # Strategy 2: Long sequence, use multiple subplots with limited labels each
@@ -233,7 +336,9 @@ def main(args):
 
             current_fig, axs = plt.subplots(num_s_plots, 1, figsize=(fig_width, fig_total_height), sharey=True, squeeze=False)
             axs = axs.flatten() 
-            nlls_chunks = np.array_split(np.array(nlls_to_plot_main), num_s_plots)
+            # 为每种曲线准备分块数据
+            variant_chunks = {name: np.array_split(np.array(seq), num_s_plots) for name, seq, _ in variants_plot}
+            nlls_chunks = variant_chunks["final"]
             labels_chunks = np.array_split(np.array(labels_to_plot_main), num_s_plots)
             
             current_fig.suptitle(f"NLL per Token for Sample {i + 1} (Mean NLL: {np.mean(nlls_to_plot_main):.2f}) - {len(nlls_to_plot_main)} tokens in {num_s_plots} subplots", fontsize=16)
@@ -248,7 +353,10 @@ def main(args):
                 global_end_idx = global_start_idx + len(chunk_nlls_data) - 1
                 chunk_start_idx_val += len(chunk_nlls_data)
 
-                ax_j.plot(chunk_nlls_data, marker='o', linestyle='-', markersize=2, color='dodgerblue', linewidth=1)  # Smaller markers for many subplots
+                # 绘制三条曲线
+                for name, seq, color in variants_plot:
+                    chunk_seq = variant_chunks[name][j].tolist()
+                    ax_j.plot(chunk_seq, linewidth=1, color=color, label=name if j == 0 else None)
                 ax_j.set_title(f"Tokens {global_start_idx}-{global_end_idx} (Mean NLL: {np.mean(chunk_nlls_data):.2f})", fontsize=9)
                 ax_j.grid(True, linestyle=':', alpha=0.6)
 
@@ -268,7 +376,18 @@ def main(args):
                 elif j == num_s_plots - 1:
                     print(f"DEBUG: Last subplot ({j}): {len(chunk_nlls_data)} tokens, labels: {chunk_labels_data[:5]}...")
                 
+                # 绘制落在当前子区间的阈值分块边界（虚线）
+                for idx_T, T in enumerate(threshold_list):
+                    _color = threshold_colors[idx_T % len(threshold_colors)]
+                    local_bounds = [b - global_start_idx for b in bounds_by_threshold[T] if global_start_idx <= b <= global_end_idx]
+                    for k_local, b_local in enumerate(local_bounds):
+                        ax_j.axvline(x=b_local, color=_color, linestyle='--', linewidth=1, alpha=0.8,
+                                     label=f"T={T}" if (j == 0 and k_local == 0) else None)
+
             print(f"DEBUG: Set {total_labels_set} total x-axis labels across {num_s_plots} subplots for sample {i+1} (target: {SUBPLOT_TARGET_TOKENS} per subplot)")
+            # 仅在首个子图添加图例
+            if num_s_plots > 0:
+                axs[0].legend()
             current_fig.tight_layout(rect=[0, 0.03, 1, 0.95])
         
         # --- Common save and close logic ---
@@ -284,8 +403,8 @@ def main(args):
             print(f"No figure was created for sample {i+1}, skipping save.")
 
     # NLL Distribution Plot
-    if all_nlls_per_sample and any(len(s) > 0 for s in all_nlls_per_sample):
-        flat_nlls_for_dist = np.concatenate([s for s in all_nlls_per_sample if len(s) > 0])
+    if all_scores_final and any(len(s) > 0 for s in all_scores_final):
+        flat_nlls_for_dist = np.concatenate([s for s in all_scores_final if len(s) > 0])
         if flat_nlls_for_dist.size > 0:
             plt.figure(figsize=(12, 7))
             plt.hist(flat_nlls_for_dist, bins=max(50, len(set(flat_nlls_for_dist)) // 5 if len(set(flat_nlls_for_dist)) > 25 else 10),
@@ -315,20 +434,55 @@ def main(args):
 
     print(f"Evaluation finished. Charts saved to directory: {args.output_dir}")
 
+    threshold_list = getattr(args, "scan_thresholds", [8.0, 16.0, 32.0, 64.0, 128.0])
+    threshold_colors = ["red", "green", "orange", "purple"]
+
+    def calc_boundaries(score_seq: list[float], T: float):
+        bounds = []
+        acc = 0.0
+        for idx, val in enumerate(score_seq):
+            acc += val
+            if acc >= T:
+                bounds.append(idx)
+                acc = 0.0
+        return bounds
+
+    # ---------------- 统计平均分块长度 ----------------
+    if threshold_list:
+        for T in threshold_list:
+            lens_all = []
+            for seq in all_scores_final:
+                bounds = calc_boundaries(seq, T)
+                if not bounds:
+                    lens_all.append(len(seq))
+                else:
+                    prev = -1
+                    for b in bounds:
+                        lens_all.append(b - prev)
+                        prev = b
+                    if prev < len(seq) - 1:
+                        lens_all.append(len(seq) - prev - 1)
+            if lens_all:
+                print(f"[ChunkStats] T={T}: 平均块长={np.mean(lens_all):.1f} token, 中位数={np.median(lens_all):.1f}, 总块数={len(lens_all)}")
+            else:
+                print(f"[ChunkStats] T={T}: 无数据")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
 
-    args.MODEL_NAME = "/public/home/ssjxzkz/Projects/block-blm/out/L6-D256-x070/rwkv-211"
-    args.data_file = "/public/home/ssjxzkz/Datasets/lm/OptimalScale_ClimbLab/mmap/block_blm_data_device_0"
-    args.output_dir = "/public/home/ssjxzkz/Projects/block-blm/out/L6-D256-x070/"
+    # args.MODEL_NAME = "/public/home/ssjxzkz/Projects/block-blm/out/L6-D256-x070/rwkv-211"
+    args.MODEL_NAME = "assets/weights/rwkv_s"
+    # args.data_file = "/public/home/ssjxzkz/Datasets/lm/OptimalScale_ClimbLab/mmap/block_blm_data_device_0"
+    args.output_dir = "out/eval_tokenizer"
 
     args.epoch_steps = 40320
     args.micro_bsz = 1
     args.real_bsz = 1
     args.ctx_len = 4096
-    args.magic_prime = 1219355507
-    args.train_stage = 3
+    # args.magic_prime = 1219355507
+    # args.train_stage = 3
 
     args.n_layer = 6
     args.n_embd = 256
@@ -336,4 +490,9 @@ if __name__ == "__main__":
     args.vocab_size = 256
 
     args.num_samples_to_eval = 1024
+    # 评估文件路径，默认为项目根目录下 assets/ddn.md
+    args.eval_file = os.path.join("assets", "ddn.md")
+
+    args.freq_alpha = 0.25
+    args.ctx_window = 32
     main(args)

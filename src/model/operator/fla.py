@@ -17,7 +17,7 @@ def RUN_RWKV7_INFCTX(*args, **kwargs):
 if 'x070' in train_config.my_testing:
     from rwkvfla.ops.rwkv7 import chunk_rwkv7
 
-    if train_config.train_type == 'infctx':
+    if train_config.train_type == 'infctx' or train_config.train_type in ['sd_only_state', 'sd_both']:
         def RUN_RWKV7_INFCTX(r, k, v, w, a, b, s, HEAD_SIZE=64):
             B, T, HC = w.shape
             C = HEAD_SIZE

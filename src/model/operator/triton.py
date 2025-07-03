@@ -1,4 +1,5 @@
-print('x070 Wind Triton Kernel Mode')
+from lightning_utilities.core.rank_zero import rank_zero_info
+rank_zero_info('x070 Wind Triton Kernel Mode')
 
 import torch as th
 import triton

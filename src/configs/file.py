@@ -5,6 +5,7 @@ from datetime import datetime
 import os
 import tomllib
 from loguru import logger
+from lightning_utilities.core.rank_zero import rank_zero_info
 
 @dataclass
 class FileConfig:
@@ -47,6 +48,7 @@ class FileConfig:
 
         if self.my_pile_stage >= 2:  # find latest saved model
             list_p = []
+            rank_zero_info(f"proj_dir: {self.proj_dir}")
             for p in os.listdir(self.proj_dir):
                 if p.startswith("rwkv") and p.endswith(".pth"):
                     p = ((p.split("-"))[1].split("."))[0]

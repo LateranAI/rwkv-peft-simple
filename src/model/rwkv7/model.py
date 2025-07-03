@@ -5,7 +5,7 @@ from torch.utils.checkpoint import checkpoint as torch_checkpoint
 import torch
 import torch.nn as nn
 import deepspeed
-from src.training_loop.state import BlockStateList
+from src.model.state import BlockStateList
 from .block import Block
 from src.configs.train import train_config
 

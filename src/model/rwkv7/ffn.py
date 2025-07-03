@@ -1,5 +1,5 @@
 import torch.nn as nn
-from src.training_loop.state import *
+from src.model.state import *
 from src.model.peft.linear import make_linear_ffn
 from src.configs.train import train_config
 from src.configs.model import model_config
@@ -11,7 +11,7 @@ else:
 
 def RWKV_Cmix_v7(*args, **kwargs):
     
-    if train_config.train_type == 'infctx':
+    if train_config.train_type == 'infctx' or train_config.train_type in ['sd_only_state', 'sd_both']:
         return RWKV_CMix_x070_infctx(*args, **kwargs)
     elif model_config.fused_kernel:
         return RWKV_CMix_x070_fla(*args, **kwargs)

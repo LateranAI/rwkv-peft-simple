@@ -1,7 +1,7 @@
 import torch.nn as nn
 from .ffn import RWKV_Cmix_v7
 from .att import RWKV_Tmix_v7
-from src.training_loop.state import BlockState
+from src.model.state import BlockState
 from src.configs.train import train_config
 class Block(nn.Module):
     def __init__(self, args, layer_id):
@@ -30,8 +30,14 @@ class Block(nn.Module):
     #     return x, v_first
     @property
     def _use_infctx(self):
-        """判断是否使用无限上下文模式"""
-        return train_config.train_type == 'infctx'
+        if train_config.train_type == 'infctx':
+            return True
+        elif train_config.train_type == 'sd_only_idx':
+            return False
+        elif train_config.train_type in ['sd_only_state', 'sd_both']:
+            return True
+        else:
+            return False
 
     def forward(self, *args, **kwargs):
         if self._use_infctx:

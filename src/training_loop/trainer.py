@@ -34,8 +34,10 @@ class train_callback(pl.Callback):
         self.args = SimpleNamespace(**{**vars(model_config), **vars(train_config), **vars(file_config)})
 
         self.loss_file = os.path.join(self.args.proj_dir, "loss_data.json")
-        if os.path.exists(self.loss_file):
-            os.remove(self.loss_file)
+        # 仅在 rank-0 进程清理旧的 loss 文件，避免多进程同时删除 / 创建导致冲突
+        if ((not torch.distributed.is_available()) or (not torch.distributed.is_initialized()) or torch.distributed.get_rank() == 0):
+            if os.path.exists(self.loss_file):
+                os.remove(self.loss_file)
             
     def write_data(self, loss_data, t_cost, kt_s):
         # 将loss数据写入文件，便于streamlit绘图

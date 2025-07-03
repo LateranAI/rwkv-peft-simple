@@ -13,7 +13,7 @@ def record_time(name):
     if tt < time_slot[name]:
         time_slot[name] = tt
 
-class TOKENIZER():
+class Tokenizer:
     def __init__(self, WORD_NAME, UNKNOWN_CHAR='\ue083'):
         if 'list' in str(type(WORD_NAME)):
             self.charMode = False
