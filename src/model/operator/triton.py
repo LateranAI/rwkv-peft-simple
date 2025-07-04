@@ -1,3 +1,19 @@
+"""
+模块: src.model.operator.triton
+
+角色: 使用 Triton 语言实现的 RWKV7 前向与反向算子，与 PyTorch Autograd 集成。该实现利用 `triton.jit` 编写高性能矩阵运算内核，在 GPU 上高效执行长序列 RWKV 注意力。
+该模块在 model_config.op == 'triton' 时被 `rwkvop.py` 动态导入。
+
+依赖:
+- triton, torch
+- lightning_utilities.core.rank_zero 用于日志
+
+公共接口:
+- RUN_CUDA_RWKV7g
+- RUN_RWKV7_STATE
+
+注意: 仅支持 HEAD_SIZE = 64, chunk size = 16 的配置，且需要 GPU 支持。
+"""
 from lightning_utilities.core.rank_zero import rank_zero_info
 rank_zero_info('x070 Wind Triton Kernel Mode')
 
@@ -158,6 +174,16 @@ def bw_attn_triton(w_,q_,k_,v_,a_,b_, dy_,s_,dsT_, dw_,dq_,dk_,dv_,da_,db_,ds0_,
 
 
 class TritonRWKV7(th.autograd.Function):
+    """Triton 实现的 RWKV7 Autograd Function。
+
+    前向: 调用 `fw_attn_triton` 内核完成批量 (B) * 长度 (T) * 头数 (H) * 通道 (C) 四维张量的 RWKV7 注意力计算，并返回输出张量与最终状态。
+
+    反向: 对应地调用 `bw_attn_triton` 计算梯度。
+
+    保存内容:
+    - ctx.save_for_backward(w, q, k, v, a, b, s) 以供反向使用
+    - ctx.dot_prec 保存点乘精度模式 (fp32 / tf32 / bf16)
+    """
     @staticmethod
     def forward(ctx, w,q,k,v,z,b,s0, dot_prec):
         K = 16

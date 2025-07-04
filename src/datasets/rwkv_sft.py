@@ -1,3 +1,24 @@
+"""
+rwkv_sft.py
+=====================================================
+本文件封装 **Supervised Fine-Tuning (SFT)** 数据集的
+加载与预处理逻辑，主要服务于 RWKV-Chat 等指令微调场景。
+
+关键流程
+----------
+1. 通过 🤗 `datasets.load_dataset` 加载 json / jsonl 等原始对话数据。
+2. 使用 `PROMPT` 模板把 (instruction, response) 组装成单条序列；
+3. `_tokenize_fn` 调用 HuggingFace tokenizer 生成 ``input_ids``，并
+   同步构造 ``labels``，前缀部分 label 被置为 ``IGNORE_INDEX`` 以
+   屏蔽用户提示对 loss 的贡献；
+4. `DataCollatorForSupervisedDataset` 负责动态 padding，并返回
+   `(input_ids, labels, attention_mask)` 三元组。
+
+公共入口
+~~~~~~~~
+`sft_dataset(script_args)` -> Tuple[Tensor, Tensor, Tensor]
+返回预处理后的张量，供 `dataset_sft.MyDataset` 直接使用。
+"""
 
 import copy
 from typing import Optional, Dict, Sequence, List, Literal
@@ -27,7 +48,7 @@ PROMPT = (
 
 
 def _tokenize_fn(strings: Sequence[str], tokenizer: transformers.PreTrainedTokenizer) -> Dict:
-    """Tokenize a list of strings."""
+    """对输入字符串列表执行批量分词, 返回字典格式张量。"""
     tokenized_list = [tokenizer(text, max_length=tokenizer.model_max_length,truncation=True,)for text in strings]
     input_ids = labels = [np.array(tokenized.input_ids) for tokenized in tokenized_list]
     input_ids_lens = labels_lens = [len(tokenized.input_ids) for tokenized in tokenized_list]
@@ -44,7 +65,7 @@ def preprocess(
     targets: Sequence[str],
     tokenizer: transformers.PreTrainedTokenizer,
 ) -> Dict:
-    """Preprocess the data by tokenizing."""
+    """将 sources & targets 拼接后分词, 构造 IGNORE_INDEX label 区间。"""
     examples = [s + t for s, t in zip(sources, targets)]
     examples_tokenized, sources_tokenized = [_tokenize_fn(strings, tokenizer) for strings in (examples, sources)]
     input_ids = examples_tokenized["input_ids"]
@@ -54,6 +75,7 @@ def preprocess(
     return dict(input_ids=input_ids, labels=labels)
 
 def process_conversation_text(conversations, tokenizer):
+    """(暂未启用) 将多轮对话转换为 input/label 对格式。"""
     input_ids = []
     labels = []
     conversation_text = ""
@@ -80,13 +102,14 @@ def process_conversation_text(conversations, tokenizer):
     }
 
 def train_tokenize_function(examples, tokenizer, query, response):
+    """Datasets.map 回调, 将一行样本映射到 LM 可用张量字典。"""
     sources = [PROMPT.format_map(dict(instruction=instruction)) for instruction in examples[query]]
     targets = [f"{output}\n{EOT_TOKEN}" for output in examples[response]]
     data_dict = preprocess(sources, targets, tokenizer)
     return data_dict
 
 def sft_dataset(script_args):
-
+    """高层包装, 返回 (input_ids, labels, attn_mask) 三元张量。"""
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         tokenizer_path,
         model_max_length=script_args.ctx_len,

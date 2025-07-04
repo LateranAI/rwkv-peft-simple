@@ -1,3 +1,30 @@
+"""
+文件名: att.py
+所属路径: src/model/rwkv7
+
+功能概述:
+    RWKV-7 模型 TimeMix 注意力模块的实现。该文件提供三个 TimeMix 变体:
+        1. RWKV_Tmix_x070            ‑ 适用于常规训练 / 推理
+        2. RWKV_Tmix_x070_State      ‑ 适用于 State-Tuning 训练模式
+        3. RWKV_Tmix_x070_infctx     ‑ 适用于无限上下文 (Infinite Context) 推理
+
+主要职责:
+    • 依据全局 `train_config.train_type` 在工厂方法 `RWKV_Tmix_v7` 中动态路由 TimeMix 类。
+    • 在 `RWKV_Tmix_x070` 中实现 LoRA-参数化的时间衰减、门控、增量值残差及 CUDA Fused Kernel 调用。
+    • 为 State-Tuning / Infinite-Context 引入持久状态 (TimeMixState) 的前向推理逻辑。
+
+关键依赖:
+    - src.model.peft.linear.make_linear_att : 构造可插拔的线性层 (支持 LoRA / P-Tuning)。
+    - src.model.operator.rwkvop : 提供 `RUN_CUDA_RWKV7g`, `RUN_RWKV7_STATE`, `RUN_RWKV7_INFCTX` CUDA Kernel。
+    - src.model.state : TimeMixState 数据结构, 用于保存跨 Chunk 的状态。
+
+输入 / 输出约定:
+    forward 接口统一接受形如 (B, T, C) 的张量, 并根据模式返回:
+        - 普通模式: (output, v_first)
+        - State 模式: 同上
+        - infctx 模式: (output, v_first, TimeMixState)
+"""
+
 import math
 
 import torch.nn as nn
@@ -18,6 +45,16 @@ else:
     FusedGroupNorm = None
 
 def RWKV_Tmix_v7(*args, **kwargs):
+    """工厂函数
+
+    根据当前 `train_config.train_type` 返回合适的 TimeMix 实例。
+
+    参数:
+        *args, **kwargs: 透传给 TimeMix 类构造函数。
+
+    返回:
+        nn.Module: TimeMix 变体实例 (RWKV_Tmix_x070 / RWKV_Tmix_x070_State / RWKV_Tmix_x070_infctx)。
+    """
     
     if train_config.train_type == 'state':
         return RWKV_Tmix_x070_State(*args, **kwargs)
@@ -27,6 +64,18 @@ def RWKV_Tmix_v7(*args, **kwargs):
         return RWKV_Tmix_x070(*args, **kwargs)
     
 class RWKV_Tmix_x070(nn.Module):
+    """基础 TimeMix 实现 (x070 版本)
+
+    关键逻辑:
+        1. 构造多组可训练的 LoRA 权重 (w0/w1/w2, a0/a1/a2, v0/v1/v2, 等) 用于控制衰减、学习率及门控。
+        2. 使用 `time_shift` 产生相邻 Token 差分特征, 再通过 addcmul_kernel (PyTorch / Fused) 组合生成多路输入。
+        3. 调用 `RUN_CUDA_RWKV7g` 完成高效的注意力累加。
+        4. 通过 GroupNorm 进行多头归一化, 并最终映射到输出线性层。
+
+    构造参数:
+        args : Namespace  ‑ 由 config 解析得到的模型/训练超参数集合。
+        layer_id : int    ‑ 当前块所在层序号, 用于计算层级相关的衰减比例。
+    """
     def __init__(self, args, layer_id):
         super().__init__()
         self.args = args
@@ -142,42 +191,75 @@ class RWKV_Tmix_x070(nn.Module):
 
     @torch.compile
     def forward(self, x, v_first, attention_mask=None):
-        B, T, C = x.size()
-        H = self.n_head
+        """基础 TimeMix 前向 (常规 / 训练)。
 
+        参数:
+            x (torch.Tensor): [B, T, C] 当前层输入。
+            v_first (torch.Tensor): [B, T, C] 第一层存储的 v 向量 (用于 residual)。
+            attention_mask (torch.FloatTensor | None): [B, ≤T] — 掩码。
+
+        返回:
+            out (torch.Tensor): [B, T, C]
+            v_first (torch.Tensor): 可能更新的 v_first
+        """
+        # 1. 记录形状，后续运算多次依赖 (B=batch, T=序列长度, C=特征维)
+        B, T, C = x.size()          # x: [B, T, C]
+        H = self.n_head            # 头数 H, 每头维度 N=C/H
+
+        # 2. 可选 attention_mask: 仅保留最近 T 步的 0/1 掩码并广播到特征维度
         if attention_mask is not None:
-            x = x.mul(attention_mask[:, -x.shape[-2]:, None])
-        xx = self.time_shift(x) - x
+            x = x.mul(attention_mask[:, -x.shape[-2]:, None])  # [B,T,C]
 
+        # 3. 右移一位构造相邻差分特征 xx, 与原始 x 组合产生门控输入
+        xx = self.time_shift(x) - x  # [B,T,C]
+
+        # 4. 使用 addcmul_kernel 生成六路变体 (xr/xw/xk/..) 形状同 [B,T,C]
         xr, xw, xk, xv, xa, xg = self.addcmul_kernel(x, xx)
 
-        r = self.receptance(xr)
-        w = -F.softplus(-(self.w0 + torch.tanh(xw @ self.w1) @ self.w2)) - 0.5 # soft-clamp to (-inf, -0.5)
-        k = self.key(xk)
-        v = self.value(xv)
-        if self.layer_id == 0:
-            v_first = v # store the v of the first layer
-        else:
-            v = v + (v_first - v) * torch.sigmoid(self.v0 + (xv @ self.v1) @ self.v2) # add value residual
-        a = torch.sigmoid(self.a0 + (xa @ self.a1) @ self.a2) # a is "in-context learning rate"
-        g = torch.sigmoid(xg @ self.g1) @ self.g2
+        # 5. 经过多路线性映射得到 r,w,k,v 向量
+        r = self.receptance(xr)  # [B,T,C]
+        # 时间衰减参数 w 经过 softplus 限定范围 (-∞,-0.5]
+        w = -F.softplus(-(self.w0 + torch.tanh(xw @ self.w1) @ self.w2)) - 0.5  # [1,1,C] 广播至 [B,T,C]
+        k = self.key(xk)         # [B,T,C]
+        v = self.value(xv)       # [B,T,C]
 
-        kk = k * self.k_k
+        # 6. 第一层缓存 v_first, 其余层对 v 进行残差校正 (value residual)
+        if self.layer_id == 0:
+            v_first = v  # 缓存首层 v
+        else:
+            v = v + (v_first - v) * torch.sigmoid(self.v0 + (xv @ self.v1) @ self.v2)
+
+        # 7. a: in-context LR, g: 输出门控向量
+        a = torch.sigmoid(self.a0 + (xa @ self.a1) @ self.a2)
+        g = torch.sigmoid(xg @ self.g1) @ self.g2  # [B,T,C]
+
+        # 8. 归一化键向量以提升数值稳定性, 并对 k 应用学习率 a
+        kk = k * self.k_k                 # [B,T,C]
         kk = F.normalize(kk.view(B,T,H,-1), dim=-1, p=2.0).view(B,T,C)
         k = k * (1 + (a-1) * self.k_a)
 
+        # 9. mask 应用于 v 以屏蔽 pad token 的值
         if attention_mask is not None:
             v = v * attention_mask[:, -v.shape[-2]:, None]
-        
-        x = RUN_CUDA_RWKV7g(r, w, k, v, -kk, kk*a)
+
+        # 10. 调用 CUDA Kernel 进行递归注意力累积，返回加权值 x
+        x = RUN_CUDA_RWKV7g(r, w, k, v, -kk, kk*a)  # [B,T,C]
+
+        # 11. 分组归一化，先展平 batch 与 time 维再 reshape 回
         x = self.ln_x(x.view(B * T, C)).view(B, T, C)
 
+        # 12. 输出残差融合 & 最终线性映射
         x = x + ((r.view(B,T,H,-1)*k.view(B,T,H,-1)*self.r_k).sum(dim=-1, keepdim=True) * v.view(B,T,H,-1)).view(B,T,C)
         x = self.output(x * g)
         return x, v_first
   
 
 class RWKV_Tmix_x070_State(RWKV_Tmix_x070):
+    """TimeMix 状态微调 (State-Tuning) 变体
+
+    在基础 TimeMix 上引入 `time_state` 参数, 使模型能够在训练阶段学习可持久化的时间相关状态, 
+    以实现少量参数微调 (PEFT) 的效果。
+    """
     def __init__(self, args, layer_id):
         super().__init__(args, layer_id)
         with torch.no_grad():
@@ -192,6 +274,7 @@ class RWKV_Tmix_x070_State(RWKV_Tmix_x070):
 
     @torch.compile
     def forward(self, x, v_first, attention_mask=None):
+        """State-Tuning TimeMix 前向, 输入/输出与基础版本一致。"""
         B, T, C = x.size()
         H = self.n_head
 
@@ -225,10 +308,29 @@ class RWKV_Tmix_x070_State(RWKV_Tmix_x070):
     
 
 class RWKV_Tmix_x070_infctx(RWKV_Tmix_x070):
+    """TimeMix 无限上下文 (Infinite-Context) 变体
+
+    在推理阶段通过 `TimeMixState` 维持跨 Chunk 的注意力累积状态, 从而突破固定 ctx_len 限制。
+    """
     def __init__(self, args, layer_id):
         super().__init__(args, layer_id)
 
     def forward(self, x, v_first, last_state: TimeMixState, attention_mask=None):
+        """无限上下文 TimeMix 前向。
+
+        参数:
+            x (torch.Tensor): [B, T, C]
+            v_first (torch.Tensor): [B, T, C]
+            last_state (TimeMixState):
+                shift_state — [B, C]
+                wkv_state   — [H, N, N] or [B, H, C//H, C//H] 具体取决于实现
+            attention_mask (torch.FloatTensor | None): [B, ≤T]
+
+        返回:
+            out (torch.Tensor): [B, T, C]
+            v_first (torch.Tensor): [B, T, C]
+            new_state (TimeMixState): 更新后的状态
+        """
         B, T, C = x.size()
         H = self.n_head
 

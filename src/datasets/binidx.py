@@ -5,6 +5,38 @@ import struct
 from functools import lru_cache
 from itertools import accumulate
 
+"""
+binidx.py
+=====================================================
+本模块实现 **MMapIndexedDataset**，用于高效读取由
+<prefix>.bin / <prefix>.idx 组成的二进制 mmap 语料格式。
+
+格式说明
+----------
+* **.bin** : 纯数据区，按 dtype 顺序顺排，无任何分隔符。
+* **.idx** : 索引文件，保存句子长度、指针以及可选的文档索引，
+  支持 V1 / V2 两个版本：
+  - V1 仅支持 token 粒度 (token_unit_len == 1)。
+  - V2 通过 `token_unit_len` & `token_unit_type_code` 扩展到多元素 token
+    （如半精度向量 / 声学特征等）。
+
+核心能力
+~~~~~~~~
+1. 零拷贝 memoryview + numpy memmap，实现 TB 级语料秒级启动。
+2. 支持 **随机访问** (`__getitem__`) 及 **批量切片** (`slice`)。
+3. `get()` 提供自由偏移读取，方便实现滑动窗口或任意跨度采样。
+
+依赖
+~~~~
+- `numpy`, `torch` : 张量与 dtype 定义
+- `struct` : 二进制解析
+
+公共接口
+~~~~~~~~
+- `MMapIndexedDataset.exists(path)` : 判断索引文件是否存在
+- `MMapIndexedDataset.get(idx, offset, length)` : 按逻辑 token 范围读取
+
+"""
 
 def print_rank_0(*message):
     pass
@@ -48,7 +80,18 @@ def data_file_path(prefix_path):
 
 
 class MMapIndexedDataset(torch.utils.data.Dataset):
+    """Memory-Mapped 二进制语料读取器。
+
+    公共 API
+    ----------
+    * ``__getitem__(idx | slice)``  — 按索引返回 numpy 数组；
+    * :py.meth:`get`               — 支持自由偏移 / 长度读取；
+    * :py.meth:`pad` / :py.meth:`only` — 快速构造定长窗口。
+    """
+
     class Index(object):
+        """解析 <prefix>.idx 文件并提供指针/长度查询。"""
+
         _HDR_MAGIC = b"MMIDIDX\x00\x00"
 
         @classmethod

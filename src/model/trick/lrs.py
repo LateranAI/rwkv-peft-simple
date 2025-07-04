@@ -1,3 +1,20 @@
+"""rwkv-peft-simple | trick.lrs
+本模块位于 `src/model/trick`，属于训练技巧（trick）层。
+
+功能角色：
+    1. 提供学习率调度策略函数 `cos_decay` 与 `wsd`，供训练循环或优化器调用。
+    2. 两个函数均纯粹基于数学公式计算，不涉及框架状态，因此可独立复用。
+
+依赖关系：
+    - 仅依赖 Python 标准库 `math`，无第三方依赖。
+
+对外公共接口：
+    - cos_decay(initial_lr, final_lr, current_step, total_steps)
+    - wsd(initial_lr, final_lr, current_step, total_steps, warmup_steps=100)
+
+类型：
+    独立工具模块；调用方只需按需导入函数。
+"""
 import math
 
 def cos_decay(initial_lr, final_lr, current_step, total_steps):

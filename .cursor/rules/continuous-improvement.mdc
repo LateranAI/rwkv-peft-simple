@@ -1,9 +1,6 @@
 ---
-description: Systematic approach for continuously improving AI assistant rules based on emerging patterns and best practices
-globs: ""
-alwaysApply: false
+alwaysApply: true
 ---
-
 # Continuous Improvement Guide for AI Development Rules
 
 This guide provides a systematic approach for continuously improving AI assistant rules based on emerging patterns, best practices, and lessons learned during development.

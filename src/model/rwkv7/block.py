@@ -1,9 +1,34 @@
+"""
+文件名: block.py
+所属路径: src/model/rwkv7
+
+功能概述:
+    定义 RWKV-7 中的语言模型 Block 结构, 由 TimeMix (注意力) 与 ChannelMix (前馈) 两部分组成。
+    Block 对外暴露统一前向接口, 并根据是否处于增量推理 (infctx) 状态路由至不同实现。
+
+关键职责:
+    • 调用子模块 RWKV_Tmix_v7 / RWKV_Cmix_v7 完成注意力与前馈运算。
+    • 在首层添加额外的 LayerNorm (`ln0`) 以对输入 Embedding 进行归一化。
+    • 在 infctx 模式下处理并返回 BlockState 以保存跨 Chunk 的历史状态。
+"""
+
 import torch.nn as nn
 from .ffn import RWKV_Cmix_v7
 from .att import RWKV_Tmix_v7
 from src.model.state import BlockState
 from src.configs.train import train_config
+
 class Block(nn.Module):
+    """RWKV 模型的基础计算块 (Block)
+
+    参数:
+        args: Namespace ‑ 全局模型/训练超参数
+        layer_id: int  ‑ 当前块编号 (0-based)
+
+    前向接口:
+        forward_normal : 用于常规训练 / 推理
+        forward_infctx  : 用于无限上下文推理, 需维护 BlockState
+    """
     def __init__(self, args, layer_id):
         super().__init__()
         self.args = args
@@ -41,6 +66,17 @@ class Block(nn.Module):
         return self.forward_normal(*args, **kwargs)
 
     def forward_normal(self, x, v_first, attention_mask = None):
+        """常规前向。
+
+        参数:
+            x (torch.Tensor): [B, T, C] 当前隐表示。
+            v_first (torch.Tensor): [B, T, C] 第一层保存的 v 向量。
+            attention_mask (torch.FloatTensor | None): [B, ≤T] — 可选掩码。
+
+        返回:
+            x_out (torch.Tensor): [B, T, C] — 经过 Block 后的表示。
+            v_first (torch.Tensor): [B, T, C] — 可能更新的 v_first。
+        """
         if self.layer_id == 0:
             x = self.ln0(x)
 
@@ -51,6 +87,19 @@ class Block(nn.Module):
         return x, v_first
 
     def forward_infctx(self, x, v_first, last_state: BlockState, attention_mask = None):
+        """无限上下文前向。
+
+        参数:
+            x (torch.Tensor): [B, T, C]
+            v_first (torch.Tensor): [B, T, C]
+            last_state (BlockState): 保存上一块 TimeMix / ChannelMix 状态。
+            attention_mask (torch.FloatTensor | None): [B, ≤T]
+
+        返回:
+            x_out (torch.Tensor): [B, T, C]
+            v_first (torch.Tensor): [B, T, C]
+            new_state (BlockState): 更新后的状态
+        """
         if self.layer_id == 0:
             x = self.ln0(x)
 

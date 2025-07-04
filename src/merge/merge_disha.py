@@ -1,3 +1,34 @@
+"""
+文件说明:
+    该脚本用于将 DiSHA 形式的参数高效组块 (Group Block Matrix Multiplication, GBMM) 增量权重与基础 RWKV 权重进行合并，得到可推理的完整模型权重文件。
+
+功能角色:
+    - 工具层脚本，定位于模型后处理阶段，仅在 DiSHA 微调结束后调用。
+    - 支持可选量化 (4bit / nf4 / fp4 / int8 / none) 以减小输出权重体积。
+
+核心依赖:
+    - torch: 权重加载与保存、张量计算。
+    - bitsandbytes.functional: 量化与反量化。
+    - einops.rearrange: 用于张量维度变换以适配 DiSHA 的分块结构。
+
+关键步骤概览:
+    1. 解析命令行参数，确定基础权重、DiSHA 增量权重、输出位置以及量化方式;
+    2. 将三者加载到 CPU/GPU 内存;
+    3. 针对每个 `*.weight` 参数，若存在对应 `.disha` 增量，则根据维度 (2-D/3-D) 做分块加法或矩阵乘法累加;
+    4. 可选对结果进行量化处理;
+    5. 保存合并后的权重至输出路径。
+
+输入参数说明:
+    --base_model: 基础模型权重文件;
+    --peft_checkpoint: DiSHA 增量权重文件;
+    --output: 输出权重文件路径;
+    --quant: 量化类型 (默认 none);
+    --device: 运算设备 (默认 cuda)。
+
+副作用说明:
+    - 根据 `--device` 选择可能占用显存资源;
+    - 会在输出路径生成/覆盖权重文件。
+"""
 from collections import OrderedDict
 import os
 import sys

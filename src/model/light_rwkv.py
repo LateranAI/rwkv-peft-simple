@@ -1,6 +1,24 @@
 ########################################################################################################
 # The RWKV Language Model - https://github.com/BlinkDL/RWKV-LM
 ########################################################################################################
+"""rwkv-peft-simple | model.light_rwkv
+本模块封装了 RWKV 模型在 PyTorch Lightning 训练框架中的顶层逻辑。
+
+功能角色：
+    1. 管理 `RWKV7` 网络结构与训练/推理过程。
+    2. 构造分组优化器与学习率比例，以支持 LayerWise-LR、权重衰减与 DeepSpeed offload。
+    3. 针对不同 `train_type`（常规 / infctx）动态生成 `forward` 与 `training_step` 实现。
+
+依赖关系：
+    - PyTorch / Lightning
+    - DeepSpeed（可选）
+    - 项目内部模块：`src.model.rwkv7.*`, `src.model.state.BlockStateList`, `src.configs.*`
+
+对外公共接口：
+    - RWKV (LightningModule)
+
+类型：核心训练逻辑层。
+"""
 import os
 
 from torch.utils.checkpoint import checkpoint as torch_checkpoint
@@ -69,6 +87,20 @@ else:
 
 
 class RWKV(pl.LightningModule):
+    """LightningModule 封装的 RWKV 模型。
+
+    关键职责：
+        1. 初始化底层 `RWKV7` 网络并根据 `model_config` 设置损失函数。
+        2. 构建分组学习率与权重衰减策略的优化器，支持 DeepSpeed Offload。
+        3. 针对 `train_type` 的不同，派生合适的 `forward` / `training_step` 实现。
+
+    参数:
+        args (Namespace): 由 CLI 或配置文件解析得到的超参数集合。
+
+    属性:
+        model (RWKV7):     底层可微分网络结构。
+        criterion (nn.Module): 交叉熵损失或融合损失，依据 `model_config.fused_kernel`。
+    """
     def __init__(self, args):
         super().__init__()
         self.args = args
@@ -163,13 +195,45 @@ class RWKV(pl.LightningModule):
     if train_config.train_type == 'infctx':
         def forward(self, idx,  last_shift_states: torch.Tensor,
                 last_wkv_states: torch.Tensor, attention_mask=None):
+            """无限上下文 (infctx) 前向传播。
+
+            参数说明:
+                idx (torch.LongTensor): [B, T] — 词 ID 序列, B 为批大小, T 为当前 Chunk 长度。
+                last_shift_states (torch.Tensor): [N, 2, B, C] — 上一次 Block 移位状态, N 为层数, C 为嵌入维度。
+                last_wkv_states  (torch.Tensor): [N, B, H, C//H, C//H] — 累积的 WKV 状态 (见 `BlockStateList`).
+                attention_mask (torch.FloatTensor | None): [B, ≤T] — 可选遮罩, 元素为 0/1。
+
+            返回:
+                logits (torch.FloatTensor): [B, T, vocab_size]
+                new_shift_states (torch.Tensor): 与 `last_shift_states` 相同形状, 更新后的状态。
+                new_wkv_states  (torch.Tensor): 与 `last_wkv_states` 相同形状, 更新后的状态。
+            """
             return self.model(idx, last_shift_states, last_wkv_states, attention_mask)
     else:
         def forward(self, idx, attention_mask=None):
+            """常规前向传播 (非 infctx)。
+
+            参数:
+                idx (torch.LongTensor): [B, T]
+                attention_mask (torch.FloatTensor | None): [B, ≤T]
+
+            返回:
+                logits (torch.FloatTensor): [B, T, vocab_size]
+            """
             return self.model(idx, attention_mask)
 
     if train_config.train_type == 'infctx':
         def training_step(self, batch, batch_idx):
+            """infctx 训练一步。
+
+            batch 结构: Tuple[idx, targets]。
+                idx     — LongTensor[B, T]
+                targets — LongTensor[B, T] (填充位置标记为 -100)
+
+            内部张量:
+                states.shift_states — [N, 2, B, C]
+                states.wkv_states  — [N, B, H, C//H, C//H]
+            """
             args = self.args
             T_train = args.chunk_ctx 
             idx, targets= batch
@@ -220,6 +284,15 @@ class RWKV(pl.LightningModule):
             return total_loss
     else:
         def training_step(self, batch, batch_idx):
+            """常规训练一步 (非 infctx)。
+
+            batch 可能为两种结构:
+                1. data_type == 'sft': (idx, targets, mask)
+                   mask 形状 [B, T] — 0/1 掩码。
+                2. 其他: (idx, targets)
+
+            返回: torch.Tensor 标量 loss。
+            """
             args = self.args
             if args.data_type=='sft':
                 idx, targets, mask = batch

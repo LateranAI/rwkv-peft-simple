@@ -1,3 +1,19 @@
+"""
+文件名: peft_loading.py
+所属路径: src/model/peft
+
+功能概述:
+    负责根据训练/推理配置加载基础 RWKV 模型并按需注入 PEFT (LoRA / DiSHA / PISSA / State-Tuning) 权重。
+
+    主要流程:
+        1. 解析全局 configs (train/file/model) 合并为 args。
+        2. 创建模型 (RWKV or StateDecoder) 并根据 train_type / peft / quant 决定哪些参数可训练。
+        3. 加载基础 checkpoint、PEFT checkpoint、量化权重, 并处理多种 edge case (形状不一致、strict=False 等)。
+        4. 返回 (args, model) 供上层训练脚本使用。
+
+    该模块在多 GPU 训练/推理环境中保证只在 rank-0 打印日志并安全写文件。
+"""
+
 import os
 from types import SimpleNamespace
 
@@ -17,9 +33,15 @@ from src.configs.model import model_config
 # -------------------------------------------------------------
 
 def _is_rank_zero() -> bool:
+    """检测当前进程是否为 rank-0 (在未初始化分布式时亦视为 rank-0)。"""
     return (not torch.distributed.is_available()) or (not torch.distributed.is_initialized()) or torch.distributed.get_rank() == 0
 
 def load_peft_model():
+    """按配置构建并加载 PEFT 模型
+
+    返回:
+        Tuple[args, nn.Module]: 合并后的配置对象及加载完成的模型实例。
+    """
     args = SimpleNamespace(**(vars(train_config) | vars(file_config) | vars(model_config)))
 
     freeze = False

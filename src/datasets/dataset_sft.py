@@ -1,6 +1,25 @@
 ########################################################################################################
 # The RWKV Language Model - https://github.com/BlinkDL/RWKV-LM
 ########################################################################################################
+"""
+dataset_sft.py
+=====================================================
+面向 **指令微调 / SFT** 任务的数据加载器实现。
+
+特点
+------
+* 兼容三种 `data_type`:
+  1. ``sft``   : 直接调用 `rwkv_sft.sft_dataset` 返回三元张量；
+  2. ``jsonl`` : 支持单句 jsonl，每行含 ``text`` 字段；
+  3. ``binidx``: 兼容大规模 token 语料，沿用 `binidx` 双文件格式。
+* 通过 `mask_fn_dict` 灵活生成损失掩码，支持只在回答段计算 loss。
+* `GlobalIndexManager` 保证确定性的 multi-device sample dispatch。
+
+模块暴露
+~~~~~~~~
+* `get_vocab_size()` : 动态获取词表大小供模型初始化。
+* `get_data_by_l_version()` : 适配旧版接口的快捷工厂。
+"""
 from types import SimpleNamespace
 
 import torch.nn.functional as F
@@ -26,6 +45,13 @@ from src.configs.file import file_config
 
 
 def get_vocab_size() -> int:
+    """读取一次 :class:`MyDataset` 以推断词表大小。
+
+    返回
+    ------
+    int
+        数据集中 `vocab_size` 字段，用于模型初始化。
+    """
     train_data = MyDataset()
     temp = train_data.vocab_size
     del train_data
@@ -37,6 +63,7 @@ def get_data_by_l_version(trainer: L.Trainer):
 
 
 class GlobalIndexManager:
+    """与 `dataset_pt` 中同名类相同，保证非 shuffle 时多卡索引互补。"""
     def __init__(self, rank=0, device_num=1, shuffle=True):
         self.current_idx = 0
         self.rank = rank
@@ -53,6 +80,7 @@ class GlobalIndexManager:
 
 
 class MyDataModule(L.LightningDataModule):
+    """Lightning DataModule 封装 — 服务于 SFT / jsonl / binidx 三种数据格式。"""
     def __init__(self):
         super().__init__()
         self.args = SimpleNamespace(**{**vars(model_config), **vars(train_config), **vars(file_config)})
@@ -80,6 +108,13 @@ class MyDataModule(L.LightningDataModule):
 
 
 class MyDataset(Dataset):
+    """多数据格式统一 Dataset。
+
+    根据 ``args.data_type`` 分流：
+    * ``sft``   — 调用 :func:`rwkv_sft.sft_dataset`
+    * ``jsonl`` — 逐行读取文本，并用 `pipeline.encode` 分词
+    * ``binidx``— 兼容大规模二进制语料
+    """
     def __init__(self):
         self.args = SimpleNamespace(**{**vars(model_config), **vars(train_config), **vars(file_config)})
 
@@ -115,6 +150,7 @@ class MyDataset(Dataset):
         return self.args.epoch_steps * self.args.real_bsz
 
     def __getitem__(self, idx):
+        """生成一条训练样本，对不同数据源执行不同逻辑。"""
         idx = self.index_manager.get_next_idx(idx_t=idx) if self.index_manager else idx
         args = self.args
         rank = self.rank

@@ -1,3 +1,25 @@
+"""
+文件名: linear.py
+所属路径: src/model/peft
+
+功能概述:
+    本模块封装了参数高效微调 (PEFT, Parameter-Efficient Fine-Tuning) 所需的线性层变体与量化工具。
+
+    主要能力:
+        • 多种权重量化 (int8 / 4bit / nf4 / fp4 / fp8) 的量化与反量化辅助函数。
+        • FP8 乘法算子 `fp8_matmul` 及其 Autograd Function 封装 `FP8Matmul`。
+        • LoRA 变体 `LoraLinear` 以及 DiSHA 系列 `BoneLinear` / `BatLinear`。
+        • 权重量化专用 `QuantLinear`。
+        • 工厂方法 `make_linear_att`, `make_linear_ffn` 根据全局配置动态返回合适线性层实现, 供模型各处直接调用。
+
+关键依赖:
+    - bitsandbytes (bnb) : 提供低位量化实现。
+    - torch._lowrank.svd_lowrank : 用于 PISSA SVD 初始化。
+
+配置项:
+    LORA_CONFIG / DiSHA_CONFIG 字典由命令行或外部配置写入, 控制 LoRA / DiSHA 参数 r, alpha 等, 以及是否启用量化。
+"""
+
 import torch, math
 import torch.nn as nn
 import bitsandbytes as bnb
@@ -8,6 +30,13 @@ from einops import rearrange
 from torch.utils.checkpoint import checkpoint as torch_checkpoint
 
 def rwkv_quantize(quant_type, weight):
+    """根据 `quant_type` 将权重张量量化并返回 (量化权重, 量化状态)。
+
+    支持类型:
+        • "4bit" / "nf4" / "fp4" : bitsandbytes 低比特 G8 量化方案
+        • "int8"                 : 8bit 量化
+        • "fp8"                  : FP8(e4m3fn) 直接 cast
+    """
     if quant_type=='4bit':
         qweight, qstate= bnb.functional.quantize_4bit(weight.data)
     elif quant_type=='nf4':
@@ -23,6 +52,7 @@ def rwkv_quantize(quant_type, weight):
 
 
 def rwkv_dequantize(quant_type, weight, qstate):
+    """将 `rwkv_quantize` 得到的权重恢复为 bfloat16, 便于后续计算。"""
     if quant_type=='4bit':
         deweight= bnb.functional.dequantize_4bit(weight.data,quant_state=qstate)
     elif quant_type=='nf4':
@@ -59,6 +89,7 @@ def fp8_matmul_(a,b): # shape3 @ shape2 only
                 return a.to(dtype=b.dtype) @ b
         
 class FP8Matmul(torch.autograd.Function):
+    """自定义 Autograd Function, 实现输入与 FP8 权重间的乘法, 并在反向阶段自动转回 bfloat16 计算梯度。"""
     @staticmethod
     def forward(ctx, input, weight):
         ctx.save_for_backward(weight)
@@ -98,6 +129,15 @@ DiSHA_CONFIG = {
     "parts": {"att", "ffn"},
 }
 class LoraLinear(nn.Module):
+    """LoRA 线性层实现
+
+    说明:
+        y = W·x + (α/r)·B·A·x          （LoRA 论文公式）
+
+    支持:
+        • 量化推理  (self.is_quant 为 True 时使用 dequantized 权重)
+        • PISSA 初始化 (先用 SVD 拆分权重, 再把残差写回 W)
+    """
 
     def __init__(self, in_features: int, out_features: int, bias: bool):
         super().__init__()
@@ -168,6 +208,7 @@ class LoraLinear(nn.Module):
     
 
 class QuantLinear(nn.Module):
+    """仅支持权重量化/反量化的线性层, 不含 LoRA / DiSHA 逻辑。"""
     def __init__(self, in_features: int, out_features: int, bias: bool):
         super().__init__()
 
@@ -189,6 +230,9 @@ class QuantLinear(nn.Module):
         
 
 class BatLinear(nn.Module):
+    """DiSHA-Bat 线性层实现
+
+    将输入/权重拆分为 r×r 子块, 通过 learnable `disha` 张量对每个分块进行仿射变换, 达到结构化适配效果。"""
     def __init__(self, in_features: int, out_features: int, bias: bool):
         super().__init__()
         self.weight = nn.Parameter(torch.empty((out_features, in_features)))
@@ -215,6 +259,9 @@ class BatLinear(nn.Module):
             return F.linear(x,self.weight+w)
     
 class BoneLinear(nn.Module):
+    """DiSHA-Bone 线性层实现
+
+    对输入按 r 切分后进行平均池化再乘以可学习偏移, 适用于参数量极低的骨骼 (Bone) 适配场景。"""
     def __init__(self, in_features: int, out_features: int, bias: bool):
         super().__init__()
         self.weight = nn.Parameter(torch.empty((out_features, in_features)))
@@ -249,6 +296,7 @@ class BoneLinear(nn.Module):
 
 @functools.wraps(LoraLinear)
 def make_linear_att(*args, **kwargs):
+    """根据全局 PEFT / 量化配置返回 Attention 路径的线性层实现。"""
     if "att" in LORA_CONFIG["parts"] and LORA_CONFIG["r"] > 0:
         return LoraLinear(*args, **kwargs)
     elif "att" in DiSHA_CONFIG["parts"] and DiSHA_CONFIG["r"] > 0 and DiSHA_CONFIG["mode"]=="bone":
@@ -263,6 +311,7 @@ def make_linear_att(*args, **kwargs):
 
 @functools.wraps(LoraLinear)
 def make_linear_ffn(*args, **kwargs):
+    """根据全局 PEFT / 量化配置返回 FFN 路径的线性层实现。"""
     if "ffn" in LORA_CONFIG["parts"] and LORA_CONFIG["r"] > 0:
         return LoraLinear(*args, **kwargs)
     elif "ffn" in DiSHA_CONFIG["parts"] and DiSHA_CONFIG["r"] > 0 and DiSHA_CONFIG["mode"]=="bone" :

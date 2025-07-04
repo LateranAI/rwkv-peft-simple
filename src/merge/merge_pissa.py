@@ -1,3 +1,31 @@
+"""
+文件说明:
+    该脚本针对 PiSSA 训练策略，将 LoRA 增量权重与其初始化权重以及基础 RWKV 权重进行差分合并，得到可直接推理的完整权重文件。
+
+功能角色:
+    - 工具层脚本: 仅在 PiSSA 微调完成后使用。
+    - 处理三组权重: 基础权重、PiSSA 初始化 LoRA 权重、PiSSA 训练后增量权重。
+
+核心依赖:
+    - torch: 权重加载与保存、矩阵运算。
+
+关键步骤概览:
+    1. 解析命令行参数，支持 `--use-gpu` 选项;
+    2. 加载三组权重至 CPU/GPU;
+    3. 对每个可学习矩阵执行 `W = (W - B_init @ A_init) + B @ A` 完成差分合并;
+    4. 保存新权重至输出文件。
+
+输入参数说明:
+    --use-gpu: 是否使用 GPU 进行运算;
+    <base_model.pth>: 基础模型权重;
+    <lora_init.pth>: PiSSA 初始化 LoRA 权重;
+    <lora_checkpoint.pth>: PiSSA 微调后增量权重;
+    <output.pth>: 输出文件路径。
+
+副作用说明:
+    - 可能占用 GPU 资源;
+    - 会在输出路径生成/覆盖权重文件。
+"""
 from collections import OrderedDict
 import os
 import sys
