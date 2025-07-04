@@ -1,3 +1,23 @@
+"""
+文件名: trainer.py
+所属路径: src/training_loop
+
+功能概述:
+    定义 Lightning Callback `train_callback` 以及辅助函数 `my_save`、`generate_init_weight`。
+    该模块负责在训练过程中动态调整学习率 / 权重衰减、记录日志、保存 checkpoint，
+    并与 wandb 及 Streamlit frontend 进行简单对接 (通过 JSON 文件写 loss 曲线)。
+
+关键函数/类:
+    - my_save: 根据文件名策略将权重保存到本地或 S3。
+    - train_callback: Lightning Callback，实现 batch/epoch 钩子以控制 LR 调度、记录指标、保存模型。
+    - generate_init_weight: 在无预训练权重时生成并保存一次初始权重文件。
+
+依赖:
+    - PyTorch Lightning, torch
+    - src.configs.*
+    - src.model.trick.lrs for LR scheduler utilities
+"""
+
 import os, math, time, datetime, subprocess
 from types import SimpleNamespace
 

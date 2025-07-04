@@ -1,3 +1,24 @@
+"""
+文件名: file.py
+所属路径: src/configs
+
+功能概述:
+    定义数据与文件相关的配置项 (FileConfig)，包含模型/数据路径、WandB 设置及阶段控制参数等。
+    提供加载 TOML 配置文件到全局单例 `file_config` 的辅助函数 `load_config`。
+
+关键角色:
+    • FileConfig — 数据类，封装训练过程所需的文件与路径超参数，并包含 `check` / `show` 方法。
+    • load_config — 将 TOML 文件映射到 FileConfig 全局实例。
+
+依赖模块:
+    - dataclasses.dataclass
+    - tomllib (Python 3.11 for TOML 解析)
+    - loguru.logger / lightning_utilities.rank_zero
+
+适用场景:
+    训练 / 推理脚本在启动前读取 configs/*/file.toml，将字段写入此数据类，再由模型加载器使用。
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -9,6 +30,20 @@ from lightning_utilities.core.rank_zero import rank_zero_info
 
 @dataclass
 class FileConfig:
+    """文件路径 & 数据相关配置
+
+    功能说明:
+        作为项目全局单例，负责保存与磁盘、数据集、检查点相关的路径及控制字段。调用 `check()` 可执行路径有效性校验。
+
+    关键字段示例 (典型值):
+        model_path (str): 模型权重路径，例如 "./models/rwkv-1.5b.pth"。
+        proj_dir  (str): 训练输出目录，例如 "./runs/run-001"。
+        data_file (str): 数据集前缀路径，例如 "./data/openwebtext"。
+        data_type (str): 数据类型，支持 "utf-8" / "binidx" 等。
+
+    副作用:
+        `check()` 会在必要时创建目录，并打印 / 记录警告信息。
+    """
     model_path: str = ""
     wandb: str = ""
     proj_dir: str = ""

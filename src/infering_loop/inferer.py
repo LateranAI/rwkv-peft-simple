@@ -1,3 +1,22 @@
+"""
+文件名: inferer.py
+所属路径: src/infering_loop
+
+功能概述:
+    提供纯推理 (inference-only) 版本的 RWKV-7 推理循环，包含：
+        • Triton 编译的 RWKV7 Fused Kernel (`wkv7s`) 的加载与包装。
+        • `WKV_7` Autograd Function — 单步递归注意力的 CUDA 调用封装。
+        • `RWKV_x070` — 轻量级 JIT ScriptModule，实现 token-by-token 或序列推理，
+          支持增量状态缓存 (`state`) 以实现 O(T) 推理。
+
+使用场景:
+    CLI / Notebook 快速推理，或评估脚本 `src/bin/eval.py` 调用。
+
+依赖:
+    - `src.model.operator.cuda.HEAD_SIZE` 作为编译宏
+    - 已训练的权重文件 `<MODEL_NAME>.pth`
+"""
+
 ########################################################################################################
 # The RWKV Language Model - https://github.com/BlinkDL/RWKV-LM
 ########################################################################################################
@@ -59,6 +78,17 @@ load(name="wkv7s", sources=["src/model/cuda/wkv7s_op.cpp", f"src/model/cuda/wkv7
 
 
 class WKV_7(torch.autograd.Function):
+    """递归注意力 CUDA Kernel 前向 Autograd Function (无梯度)。
+
+    forward(state, r, w, k, v, a, b) -> y
+
+    参数说明:
+        state (Tensor[H, N, N]): 累积 WKV 状态。
+        r,w,k,v,a,b (Tensor[T, C]): TimeMix 输入张量。
+
+    返回:
+        y (Tensor[T, C]): 当前步输出。
+    """
     @staticmethod
     def forward(ctx, state, r, w, k, v, a, b):
         with torch.no_grad():
@@ -81,6 +111,15 @@ def RWKV7_OP(state, r, w, k, v, a, b):
 ########################################################################################################
 
 class RWKV_x070(MyModule):
+    """轻量级推理版 RWKV-7
+
+    特性:
+        1. 直接加载 `.pth` 权重到 `self.z` 字典，全部转置为推理友好布局；
+        2. 提供 `forward_one` / `forward_seq` 两种推理路径；
+        3. 仅支持 `half` 精度以降低显存占用。
+
+    注意: 该类只用于评估或 demo，不支持训练反向传播。
+    """
     def __init__(self, args):
         super().__init__()
         self.args = args

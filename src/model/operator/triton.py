@@ -217,6 +217,8 @@ def tl_dot(prec:tl.constexpr, a, b):
         tl.static_assert(False)
 
 def RUN_CUDA_RWKV7g(r,w,k,v,a,b, HEAD_SIZE=64, dot_prec = 'fp32'):
+    """Triton 前向 RWKV7 注意力 (常规模式)
+    参数同 `TritonRWKV7.forward`，返回张量 [B,T,C]。"""
     B,T,HC = w.shape
     C = HEAD_SIZE
     H = HC//C
@@ -224,9 +226,15 @@ def RUN_CUDA_RWKV7g(r,w,k,v,a,b, HEAD_SIZE=64, dot_prec = 'fp32'):
     s0 = th.zeros(B,H,C,C, dtype=th.bfloat16,device=w.device)
     return TritonRWKV7.apply(w,r,k,v,a,b,s0,dot_prec)[0].view(B,T,HC)
 def RUN_RWKV7_STATE(r, k, v, w, a, b, s, HEAD_SIZE=64, dot_prec = 'fp32'):
-            B,T,HC = w.shape
-            C = HEAD_SIZE
-            H = HC//C
-            r,w,k,v,a,b = [i.view(B,T,H,C) for i in [r,w,k,v,a,b]]
-            s0 = s
-            return TritonRWKV7.apply(w,r,k,v,a,b,s0,dot_prec)[0].view(B,T,HC), None
+    """Triton 前向 RWKV7 注意力 (State Tuning) 版本。
+    返回 (output, new_state)。"""
+    B,T,HC = w.shape
+    C = HEAD_SIZE
+    H = HC//C
+    r,w,k,v,a,b = [i.view(B,T,H,C) for i in [r,w,k,v,a,b]]
+    s0 = s
+    return TritonRWKV7.apply(w,r,k,v,a,b,s0,dot_prec)[0].view(B,T,HC), None
+
+def RUN_RWKV7_INFCTX(r, k, v, w, a, b, s, HEAD_SIZE=64, dot_prec='fp32'):
+    """Triton RWKV7 无限上下文前向接口（当前未实现）。"""
+    raise NotImplementedError('triton infctx not implemented yet')

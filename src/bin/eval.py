@@ -1,3 +1,27 @@
+"""
+文件名: eval.py
+所属路径: src/bin
+
+功能概述:
+    脚本用于对字节级语言模型 (RWKV-x070) 进行评估，计算负对数似然 (NLL) 及多种频率/熵修正得分，并可输出可视化结果。
+
+主要流程:
+    1. 加载评估文件并按 ctx_len+1 字节段切分。
+    2. 调用 `RWKV_x070` 模型执行推理，收集概率分布。
+    3. 计算原始困惑度、频率修正、上下文熵修正等多种得分。
+    4. 可选绘制分数曲线并标注 UTF-8 字符对齐的标签。
+
+关键依赖:
+    - src.infering_loop.inferer.RWKV_x070
+    - src.datasets.dataset_pt.MyDataset (用于可能的批量评估)
+
+命令行参数 (重要示例):
+    --ctx_len (int)            : 上下文窗口长度
+    --freq_alpha (float)       : 低频字节抑制系数
+    --ctx_window (int)         : 计算滑动熵时的窗口半径
+
+"""
+
 import argparse
 import os
 import numpy as np
@@ -17,6 +41,19 @@ UTF8_REPLACEMENT_CHAR = '\uFFFD' # U+FFFD REPLACEMENT CHARACTER
 
 # --- Existing bytes_to_text function (for console output) ---
 def bytes_to_text(u8_list: list[int]) -> str:
+    """将字节序列安全解码为 UTF-8 文本
+
+    功能说明:
+        1. 过滤非 0-255 范围值；
+        2. 去除前缀 continuation bytes；
+        3. 使用增量解码避免尾部截断导致的异常；
+
+    参数:
+        u8_list (list[int]): 字节列表，元素需在 0-255 之间。
+
+    返回:
+        str: 解码后的文本，遇到非法序列使用 "" 代替。
+    """
     start = 0
     temp_u8_list = []
     for item in u8_list:
@@ -44,6 +81,12 @@ def bytes_to_text(u8_list: list[int]) -> str:
 
 # --- New function to generate byte-aligned labels for plotting ---
 def generate_byte_aligned_labels(byte_list: list[int]) -> list[str]:
+    """生成与字节序列等长的字符标签列表，用于 Matplotlib X 轴对齐。
+
+    规则:
+        • 有效 UTF-8 多字节字符在首字节处标记实际字符，其余字节填充 `UTF8_PADDING_CHAR`；
+        • 不合法或截断字节用 `UTF8_REPLACEMENT_CHAR` 填充。
+    """
     labels = [""] * len(byte_list)
     i = 0
     while i < len(byte_list):
@@ -97,6 +140,11 @@ def generate_byte_aligned_labels(byte_list: list[int]) -> list[str]:
     return labels
 
 def main(args):
+    """评估入口函数。
+
+    参数:
+        args (argparse.Namespace): 命令行解析结果，需包含 ctx_len, freq_alpha, ctx_window 等字段。
+    """
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # --------------------------------------------------------------

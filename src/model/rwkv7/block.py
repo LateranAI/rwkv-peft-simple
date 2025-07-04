@@ -30,6 +30,16 @@ class Block(nn.Module):
         forward_infctx  : 用于无限上下文推理, 需维护 BlockState
     """
     def __init__(self, args, layer_id):
+        """初始化 RWKV Block
+
+        功能说明：
+            组装一个完整的 Block，包括两层 LayerNorm、TimeMix 与 ChannelMix 子模块，
+            以及在第 0 层时额外添加的输入归一化层 `ln0`。
+
+        输入参数：
+            args (Namespace): 模型超参数集合。
+            layer_id (int): 当前块编号。
+        """
         super().__init__()
         self.args = args
         self.layer_id = layer_id
@@ -55,12 +65,18 @@ class Block(nn.Module):
     #     return x, v_first
     @property
     def _use_infctx(self):
+        """判断当前是否处于无限上下文模式 (train_config.train_type == 'infctx')"""
         if train_config.train_type == 'infctx':
             return True
         else:
             return False
 
     def forward(self, *args, **kwargs):
+        """路由前向传播
+
+        当 `_use_infctx` 为 True 时，调用 `forward_infctx`，否则走 `forward_normal`。
+        参数 / 返回值与对应具体实现一致。
+        """
         if self._use_infctx:
             return self.forward_infctx(*args, **kwargs)
         return self.forward_normal(*args, **kwargs)

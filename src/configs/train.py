@@ -1,3 +1,21 @@
+"""
+文件名: train.py
+所属路径: src/configs
+
+功能概述:
+    定义训练相关的超参数集合 (TrainConfig)。字段覆盖优化器、学习率调度、分布式训练、PEFT 等。
+    提供 `load_config` 将 TOML 配置写入全局单例 `train_config`。
+
+关键角色:
+    • TrainConfig — 数据类，集成训练流程所需的所有超参数，并在 `check()` 中完成推断与环境设置。
+    • load_config — TOML -> TrainConfig。
+
+依赖模块:
+    - dataclasses.dataclass
+    - tomllib
+    - torch / lightning.seed_everything
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,6 +29,21 @@ from lightning import seed_everything
 
 @dataclass
 class TrainConfig:
+    """训练超参数配置
+
+    功能说明:
+        保存训练过程中的所有可调参数，并在 `check()` 中根据硬件环境推断 batch size、精度设置等。
+
+    关键逻辑 (`check`):
+        1. 固定随机种子 (可选)。
+        2. 计算 real_bsz 与 epoch_steps。
+        3. 设置 TF32 / FP32 开关与 Lightning 精度标志。
+
+    典型字段示例:
+        precision (str): "bf16" / "fp16" / "fp32"。
+        lr_init (float): 初始学习率，例如 1e-4。
+        peft (str): "none" / "lora" / "pissa" / "disha"。
+    """
     random_seed: int = -1
     epoch_steps: int = 0
     epoch_count: int = 0

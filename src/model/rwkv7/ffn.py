@@ -48,6 +48,18 @@ class RWKV_CMix_x070(nn.Module):
         2. 通过 ReLU² 激活后映射到更高维度后再投影回隐层维度, 起到前馈作用。
     """
     def __init__(self, args, layer_id):
+        """初始化 ChannelMix 模块
+
+        功能说明：
+            创建可训练比例参数 `x_k` 及前后向线性层 (key/value)。
+
+        输入参数：
+            args (Namespace): 关键字段示例： n_embd, n_layer。
+            layer_id (int): 当前层编号。
+
+        返回值： None
+        副作用： 注册参数 & 子层。
+        """
         super().__init__()
         self.args = args
         self.layer_id = layer_id
@@ -90,6 +102,7 @@ class RWKV_CMix_x070_fla(RWKV_CMix_x070):
     """ChannelMix FusedKernel 变体
     使用 `channel_mixing_rwkv7` CUDA Kernel 取代 Python 循环以获得更高效率。"""
     def __init__(self, args, layer_id):
+        """FusedKernel 版本 ChannelMix 初始化，仅调用父类构造并移除 time_shift。"""
         super().__init__(args, layer_id)
         del self.time_shift
 
@@ -106,6 +119,7 @@ class RWKV_CMix_x070_infctx(RWKV_CMix_x070):
     """ChannelMix 无限上下文 (Infinite-Context) 变体
     在前向传播中维护并返回 `ChannelMixState` 以实现跨 Chunk 累积。"""
     def __init__(self, args, layer_id):
+        """Infinite-Context ChannelMix 初始化，移除 time_shift 并沿用父类参数。"""
         super().__init__(args, layer_id)
         del self.time_shift
 

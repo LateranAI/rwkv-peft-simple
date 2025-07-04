@@ -22,12 +22,16 @@ import torch
 from torch.utils.cpp_extension import load
 
 def RUN_CUDA_RWKV7g(*args, **kwargs):
+    """占位函数: 当 CUDA Kernel 未编译时调用。
+    抛出 NotImplementedError，以提示用户所选 op 后端不可用。"""
     raise NotImplementedError('CUDA backend not available')
 
 def RUN_RWKV7_STATE(*args, **kwargs):
+    """同上，占位函数。"""
     raise NotImplementedError('CUDA backend not available')
 
 def RUN_RWKV7_INFCTX(*args, **kwargs):
+    """同上，占位函数。"""
     raise NotImplementedError('CUDA backend not available')
 
 # HEAD_SIZE = model_config.head_size_a

@@ -1,3 +1,25 @@
+"""
+文件名: train.py
+所属路径: src/bin
+
+功能概述:
+    项目主训练脚本，负责读取配置目录 (file.toml / model.toml / train.toml)，构建 RWKV 模型并使用 PyTorch Lightning + DeepSpeed 进行多卡训练。
+
+核心流程:
+    1. load_*_config 读取配置并执行各自的 check()；
+    2. show_configs() 打印关键超参数与环境信息；
+    3. load_peft_model() 构造模型并按 PEFT / Quant 配置冻结参数；
+    4. 创建 Lightning Trainer 并启动训练。
+
+依赖组件:
+    - PyTorch Lightning Trainer
+    - DeepSpeed (可选)
+    - src.training_loop.trainer.train_callback 回调
+
+使用示例:
+    python -m src.bin.train ./configs/prepare
+"""
+
 import os
 import sys
 import warnings
@@ -40,6 +62,7 @@ from src.datasets.dataset_pt import get_data_by_l_version
 
 @rank_zero_only
 def show_configs():
+    """打印合并后的 args 配置到日志 (仅 rank-0)。"""
     args = SimpleNamespace(**{**vars(model_config), **vars(train_config), **vars(file_config)})
     logger.info(
         f"""
@@ -69,6 +92,11 @@ def show_configs():
 
 
 def main(config_dir: str):
+    """训练入口。
+
+    参数:
+        config_dir (str): 包含 file.toml / model.toml / train.toml 的目录路径。
+    """
     load_file_config(os.path.join(config_dir, "file.toml"))
     load_model_config(os.path.join(config_dir, "model.toml"))
     load_train_config(os.path.join(config_dir, "train.toml"))

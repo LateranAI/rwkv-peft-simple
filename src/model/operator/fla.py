@@ -11,12 +11,15 @@ import torch
 
 # default placeholders
 def RUN_CUDA_RWKV7g(*args, **kwargs):
+    """占位函数: 当 FLA 后端不可用或 train_type 不匹配时抛出。"""
     raise NotImplementedError('FLA backend not available')
 
 def RUN_RWKV7_STATE(*args, **kwargs):
+    """占位函数，同上。"""
     raise NotImplementedError('FLA backend not available')
 
 def RUN_RWKV7_INFCTX(*args, **kwargs):
+    """占位函数，同上。"""
     raise NotImplementedError('FLA backend not available')
 
 

@@ -1,3 +1,20 @@
+"""
+文件名: args_type.py
+所属路径: src/training_loop
+
+功能概述:
+    定义 `TrainingArgs` 数据类，集中管理 CLI / TOML 中可配置的训练超参数，
+    并与 PyTorch Lightning 参数保持一致。该文件不包含业务逻辑，仅提供类型定义
+    与默认值，供其他模块 (`train.py`, `trainer.py`, 等) 引入。
+
+依赖:
+    - dataclasses
+    - typing
+
+公共接口:
+    - TrainingArgs
+"""
+
 from dataclasses import dataclass, field
 from typing import List, Dict
 import json
@@ -5,6 +22,12 @@ import json
 
 @dataclass
 class TrainingArgs:
+    """训练参数集合
+
+    说明:
+        字段涵盖数据路径、优化器参数、模型结构、PEFT 配置以及 Lightning 初始化所需
+        的分布式/精度选项。**所有字段应保持与 configs/*.toml 中键一致**。
+    """
     load_model: str = ""
     wandb: str = ""
     proj_dir: str = "out"

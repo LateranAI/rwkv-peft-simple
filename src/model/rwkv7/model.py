@@ -44,6 +44,14 @@ class RWKV7(nn.Module):
             输出: (logits, new_shift_states, new_wkv_states)
     """
     def __init__(self, args):
+        """初始化 RWKV7 顶层模型
+
+        功能说明：
+            构建词嵌入层、`args.n_layer` 个 Block 以及最终输出头部 (LayerNorm + Linear)。
+
+        输入参数：
+            args (Namespace): 模型超参数，需包含 vocab_size、n_embd、n_layer 等字段。
+        """
         super().__init__()
         self.args = args
 
@@ -56,10 +64,13 @@ class RWKV7(nn.Module):
 
     @property
     def _use_infctx(self):
-        """判断是否使用无限上下文模式"""
+        """返回布尔值，指示是否启用无限上下文增量推理模式。"""
         return train_config.train_type == 'infctx'
 
     def forward(self, *args, **kwargs):
+        """路由前向函数
+
+        根据 `_use_infctx` 选择 `forward_infctx` 或 `forward_normal`。"""
         if self._use_infctx:
             return self.forward_infctx(*args, **kwargs)
         return self.forward_normal(*args, **kwargs)

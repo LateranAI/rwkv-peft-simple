@@ -77,6 +77,30 @@ class RWKV_Tmix_x070(nn.Module):
         layer_id : int    ‑ 当前块所在层序号, 用于计算层级相关的衰减比例。
     """
     def __init__(self, args, layer_id):
+        """初始化 TimeMix 模块
+
+        功能说明：
+            构建 TimeMix 所需所有可训练参数与子层，包括多路 LoRA 权重、归一化层及线性映射。
+
+        关键逻辑：
+            1. 依据 `layer_id` 计算衰减与比例参数，初始化可训练参数 `x_*`、`w*`、`a*`、`v*`、`g*` 等。
+            2. 调用 `make_linear_att` 生成 LoRA 兼容的线性层 (receptance/key/value/output)。
+            3. 根据 `model_config.fused_kernel` 决定 addcmul 实现（PyTorch or Fused）。
+
+        输入参数：
+            args (Namespace): 全局模型超参数，常见字段示例：
+                • n_embd (int) — 隐层维度，例如 1024
+                • n_layer (int) — 模型层数，例如 24
+                • dim_att (int) — 注意力维度，默认与 n_embd 相同
+                • head_size_a (int) — 每头维度，例如 64 / 128
+            layer_id (int): 当前块序号，从 0 开始。
+
+        返回值：
+            None
+
+        副作用：
+            向本模块注册大量 `nn.Parameter` 和子层对象，占用显存。
+        """
         super().__init__()
         self.args = args
         self.layer_id = layer_id
@@ -178,6 +202,21 @@ class RWKV_Tmix_x070(nn.Module):
             # self.output.weight.data.zero_()
 
     def torch_addcmul(self, x, xx):
+        """PyTorch addcmul 实现
+
+        功能说明：
+            对输入张量 `x` 与差分特征 `xx` 按照可训练比例 `x_*` 进行 element-wise addcmul，
+            生成六路门控输入 xr/xw/xk/xv/xa/xg。
+
+        输入参数：
+            x (Tensor[B, T, C]): 当前特征表示。
+            xx (Tensor[B, T, C]): 差分特征 (time_shift(x) - x)。
+
+        返回值：
+            Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]: 六路张量，形状均为 (B, T, C)。
+
+        副作用： 无。
+        """
         xr = x + xx * self.x_r
         xw = x + xx * self.x_w
         xk = x + xx * self.x_k
@@ -187,6 +226,15 @@ class RWKV_Tmix_x070(nn.Module):
         return xr, xw, xk, xv, xa, xg
     
     def fused_addcmul(self, x, xx):
+        """Fused CUDA addcmul 实现
+
+        功能说明：
+            调用 `fused_addcmul_rwkv7` CUDA Kernel，在 GPU 端一次性计算 xr/xw/xk/xv/xa/xg，
+            提升吞吐量。
+
+        参数与返回值同 `torch_addcmul`，但依赖额外 GPU Kernel。
+
+        副作用： 调用外部 CUDA Kernel，引入流同步开销。"""
         return fused_addcmul_rwkv7(x, xx, self.x_r, self.x_w, self.x_k, self.x_v, self.x_a, self.x_g)
 
     @torch.compile
@@ -261,6 +309,15 @@ class RWKV_Tmix_x070_State(RWKV_Tmix_x070):
     以实现少量参数微调 (PEFT) 的效果。
     """
     def __init__(self, args, layer_id):
+        """初始化 State-Tuning TimeMix 模块
+
+        功能说明：
+            在基础 TimeMix 上额外创建可学习参数 `time_state`，用于少量参数微调 (PEFT)。
+
+        输入参数同 `RWKV_Tmix_x070.__init__`。
+
+        副作用： 向模块注册 `self.time_state`。
+        """
         super().__init__(args, layer_id)
         with torch.no_grad():
             #for State-tuning
@@ -313,6 +370,10 @@ class RWKV_Tmix_x070_infctx(RWKV_Tmix_x070):
     在推理阶段通过 `TimeMixState` 维持跨 Chunk 的注意力累积状态, 从而突破固定 ctx_len 限制。
     """
     def __init__(self, args, layer_id):
+        """初始化 Infinite-Context TimeMix 模块
+
+        仅调用父类构造，保持参数一致。
+        """
         super().__init__(args, layer_id)
 
     def forward(self, x, v_first, last_state: TimeMixState, attention_mask=None):
