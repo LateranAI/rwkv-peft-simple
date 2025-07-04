@@ -1,5 +1,5 @@
-n_layer = 12
-n_embd = 768
+n_layer = 6
+n_embd = 256
 dim_att = 0
 dim_ffn = 0
 pre_ffn = 0

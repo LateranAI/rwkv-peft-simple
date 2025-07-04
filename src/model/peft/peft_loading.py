@@ -21,7 +21,7 @@ import torch
 from src.model.light_rwkv import RWKV
 from lightning_utilities.core.rank_zero import rank_zero_info, rank_zero_only
 
-from src.model.state_decoder_discarded import StateDecoder
+# from src.model.state_decoder_discarded import StateDecoder
 from src.training_loop.trainer import generate_init_weight
 from src.model.peft.linear import LORA_CONFIG
 from src.configs.train import train_config
@@ -62,10 +62,7 @@ def load_peft_model():
         DiSHA_CONFIG["mode"] = args.disha_config['mode']
         DiSHA_CONFIG["r"] = args.disha_config['r']
 
-    if not "sd" in args.train_type:
-        model = RWKV(args)
-    else:
-        model = StateDecoder(args)
+    model = RWKV(args)
 
     rank_zero_info(model)
 

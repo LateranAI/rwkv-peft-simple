@@ -94,14 +94,18 @@ class FileConfig:
                             p = int(p)
                         list_p += [p]
             list_p.sort()
-            max_p = list_p[-1]
-            if len(list_p) > 1:
-                self.my_pile_prev_p = list_p[-2]  # in case max_p is corrupted
-            if max_p == -1:
-                self.load_model = f"{self.proj_dir}/rwkv-init.pth"
+            if not list_p:
+                # 如果没有找到任何历史模型，则不进行任何操作
+                pass
             else:
-                self.load_model = f"{self.proj_dir}/rwkv-{max_p}.pth"
-            self.epoch_begin = max_p + 1
+                max_p = list_p[-1]
+                if len(list_p) > 1:
+                    self.my_pile_prev_p = list_p[-2]  # in case max_p is corrupted
+                if max_p == -1:
+                    self.load_model = f"{self.proj_dir}/rwkv-init.pth"
+                else:
+                    self.load_model = f"{self.proj_dir}/rwkv-{max_p}.pth"
+                self.epoch_begin = max_p + 1
 
         # 检查 PEFT 相关文件
         for name, path in [

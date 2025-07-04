@@ -19,7 +19,7 @@
     *   **方案**: 全面采用 `Lightning` 的原生功能，如 `ModelCheckpoint` 回调和标准的 `LRScheduler` 机制，移除自定义实现，使代码更"地道"(idiomatic)。
 
 3.  **增强模块内聚性与职责分离 (Enhance Cohesion & Separation of Concerns)**:
-    *   **问题**: 存在少数"上帝对象"(God Objects)，如 `train_callback` 和 `RWKV_x060_Lightning`，它们承担了过多的职责，违反了单一职责原则。
+    *   **问题**: 存在少数"上帝对象"(God Objects)，如 `train_callback`，它们承担了过多的职责，违反了单一职责原则。
     *   **方案**: 将这些大而全的类拆分为更小的、职责单一的组件（如 `OptimizerFactory`），并优化模块间的耦合关系。
 
 ---
