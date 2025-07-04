@@ -32,10 +32,6 @@ class Block(nn.Module):
     def _use_infctx(self):
         if train_config.train_type == 'infctx':
             return True
-        elif train_config.train_type == 'sd_only_idx':
-            return False
-        elif train_config.train_type in ['sd_only_state', 'sd_both']:
-            return True
         else:
             return False
 

@@ -21,7 +21,7 @@ def RWKV_Tmix_v7(*args, **kwargs):
     
     if train_config.train_type == 'state':
         return RWKV_Tmix_x070_State(*args, **kwargs)
-    elif train_config.train_type == 'infctx' or train_config.train_type in ['sd_only_state', 'sd_both']:
+    elif train_config.train_type == 'infctx':
         return RWKV_Tmix_x070_infctx(*args, **kwargs)
     else:
         return RWKV_Tmix_x070(*args, **kwargs)

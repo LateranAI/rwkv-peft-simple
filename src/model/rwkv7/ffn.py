@@ -11,7 +11,7 @@ else:
 
 def RWKV_Cmix_v7(*args, **kwargs):
     
-    if train_config.train_type == 'infctx' or train_config.train_type in ['sd_only_state', 'sd_both']:
+    if train_config.train_type == 'infctx':
         return RWKV_CMix_x070_infctx(*args, **kwargs)
     elif model_config.fused_kernel:
         return RWKV_CMix_x070_fla(*args, **kwargs)

@@ -5,7 +5,7 @@ import torch
 from src.model.light_rwkv import RWKV
 from lightning_utilities.core.rank_zero import rank_zero_info, rank_zero_only
 
-from src.model.state_decoder import StateDecoder
+from src.model.state_decoder_discarded import StateDecoder
 from src.training_loop.trainer import generate_init_weight
 from src.model.peft.linear import LORA_CONFIG
 from src.configs.train import train_config
