@@ -12,6 +12,7 @@ dependencies = [
     "gputils>=1.0.6",
     "lightning>=2.5.1.post0",
     "loguru>=0.7.3",
+    "matplotlib>=3.10.3",
     "ninja>=1.11.1.4",
     "plotly>=6.1.2",
     "rwkv>=0.8.29",

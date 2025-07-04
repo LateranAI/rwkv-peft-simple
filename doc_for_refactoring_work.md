@@ -144,3 +144,4 @@ AI Agent 将遵循“注释-理解-总结-重构”四阶段流程，确保每�
 * Athena 的重构必须满足功能等价 + 误差为零。
 * 若模块连续5次无法重构通过测试，将标记为 `NEEDS_MANUAL_REVIEW`，跳过当前阶段。
 
+### 项目使用uv激活环境, 记得调取source .venv/bin/activate

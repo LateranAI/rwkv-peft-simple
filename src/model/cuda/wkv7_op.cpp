@@ -23,14 +23,12 @@ void backward(torch::Tensor &w, torch::Tensor &q, torch::Tensor &k, torch::Tenso
 }
 
 // 将 forward / backward 函数注册为 wind_backstepping PyTorch 扩展中的 op
-torch::Library::Options options;
 TORCH_LIBRARY(wind_backstepping, m) {
     m.def("forward(Tensor w, Tensor q, Tensor k, Tensor v, Tensor z, Tensor a, Tensor(a!) y, Tensor(b!) s, Tensor(c!) sa) -> ()"); // 前向 op 签名
     m.def("backward(Tensor w, Tensor q, Tensor k, Tensor v, Tensor z, Tensor a, Tensor dy, Tensor s, Tensor sa, Tensor(a!) dw, Tensor(b!) dq, Tensor(c!) dk, Tensor(d!) dv, Tensor(e!) dz, Tensor(f!) da) -> ()"); // 反向 op 签名
 }
 
 // 指定在 CUDA 后端下的实现映射
-torch::Library::Options options2;
 TORCH_LIBRARY_IMPL(wind_backstepping, CUDA, m) {
     m.impl("forward", &forward); // 绑定 forward
     m.impl("backward", &backward); // 绑定 backward
