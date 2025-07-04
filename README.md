@@ -1,3 +1,120 @@
+# rwkv-peft-simple: A Refined Framework for RWKV Training and PEFT
+
+`rwkv-peft-simple` is a streamlined, user-friendly, and highly modular framework for training and fine-tuning RWKV models. It places a strong emphasis on **clarity, modularity, and ease of use**, providing a clean and well-structured codebase ideal for both research and practical applications. The framework is built on PyTorch Lightning to abstract away boilerplate training code and supports various Parameter-Efficient Fine-Tuning (PEFT) methods like LoRA and PiSSA out of the box.
+
+## Core Philosophy
+
+This project is not just a fork; it is a **conceptual rebuild** of the RWKV training ecosystem. The guiding principles are:
+- **Modularity**: Every component (data loading, model architecture, training logic, PEFT methods) is isolated in its own dedicated module with clear interfaces.
+- **Clarity over Cuteness**: The code prioritizes readability and clear intent over overly complex or "clever" implementations.
+- **Configuration-Driven**: All aspects of training, from model size to learning rates to PEFT strategies, are controlled via simple `.toml` configuration files.
+- **Extensibility**: The modular design makes it easy to add new PEFT methods, model components, or data loaders without modifying the core training pipeline.
+
+---
+
+## Architecture Overview
+
+The framework follows a clear, layered architecture, with dependencies flowing from the high-level application layer down to the low-level computational kernels.
+
+```mermaid
+graph TD
+    subgraph " "
+        direction LR
+        A["Application Layer<br>(src/bin)"]
+        B["Training Control Layer<br>(src/training_loop)"]
+        C["Model & Framework Interface<br>(src/model)"]
+        D["Data Loading & Processing<br>(src/datasets)"]
+        E["Configuration Layer<br>(src/configs)"]
+        F["Utilities & Offline Tools<br>(src/utils)"]
+        G["PEFT Weight Merging<br>(src/merge)"]
+    end
+
+    A --> B
+    A --> C
+    B --> C
+    C --> D
+    C --> F
+    B --> E
+    C --> E
+
+    style A fill:#cde4ff,stroke:#8ab4f8
+    style B fill:#d2e3fc,stroke:#8ab4f8
+    style C fill:#d2e3fc,stroke:#8ab4f8
+    style D fill:#e8f0fe,stroke:#8ab4f8
+    style E fill:#e8f0fe,stroke:#8ab4f8
+    style F fill:#e8f0fe,stroke:#8ab4f8
+    style G fill:#e8f0fe,stroke:#8ab4f8
+```
+
+### Module Descriptions
+
+- **`src/configs`**: **Centralized Configuration**. Defines simple, global objects that hold all configuration parameters loaded from `.toml` files.
+- **`src/datasets`**: **Data Loading & Processing**. Handles loading data for pre-training and supervised fine-tuning (SFT). Features an efficient binary data loader (`binidx.py`) for large datasets.
+- **`src/utils`**: **Utilities**. Contains a runtime tokenizer and sampling engine (`tokenizer.py`) for inference, and an offline tool (`json2binidx_tool`) to convert raw `.jsonl` data into the required binary format.
+- **`src/model`**: **The Core Model Engine**. This is the heart of the project. It defines the RWKV architecture (`rwkv7`), provides a dynamic computation backend (`operator`), implements PEFT strategies (`peft`), and integrates with PyTorch Lightning (`light_rwkv.py`).
+- **`src/training_loop`**: **Training Process Control**. Contains PyTorch Lightning Callbacks that manage the training dynamics, including learning rate scheduling, logging (to console, files, and W&B), and model checkpointing.
+- **`src/bin`**: **High-Level Entrypoints**. Provides the main executable scripts, `train.py` and `eval.py`, which parse configs and launch the training or evaluation process.
+- **`src/merge`**: **PEFT Weight Merging**. A collection of command-line scripts to merge the trained PEFT weights (e.g., LoRA) back into the base model to create a single, deployable checkpoint.
+- **`src/infering_loop`**: **Inference Engine**. A standalone, lightweight inference engine (`inferer.py`) that is decoupled from the training framework, designed for efficient text generation.
+
+---
+
+## How to Run
+
+### 1. Data Preparation
+
+Before training, your dataset must be in `.jsonl` format (one JSON object per line, with a "text" key). Use the provided tool to convert it to the required `.bin`/`.idx` format.
+
+```bash
+# Example for a standard RWKV model
+python src/utils/json2binidx_tool/tools/preprocess_data.py \
+  --input /path/to/your/dataset.jsonl \
+  --output-prefix /path/to/your/dataset \
+  --vocab src/utils/json2binidx_tool/20B_tokenizer.json \
+  --dataset-impl mmap \
+  --tokenizer-type HFTokenizer \
+  --append-eod
+```
+
+### 2. Configuration
+
+All training settings are managed in `.toml` files located in the `configs/` directory. You can create a new configuration set (e.g., `configs/my_experiment/`) or modify an existing one (e.g., `configs/lora/`).
+
+- **`file.toml`**: Specifies file paths for data, output directories, etc.
+- **`model.toml`**: Defines the model architecture (layers, embedding size) and PEFT strategy.
+- **`train.toml`**: Controls the training process (learning rate, batch size, epochs, etc.).
+
+### 3. Launching Training
+
+Use the `train.py` script to start a training run. You must specify the configuration directory name.
+
+```bash
+# Example for launching a LoRA fine-tuning run
+python src/bin/train.py lora
+```
+
+The script will automatically:
+1.  Load the configuration from `configs/lora/`.
+2.  Instantiate the model and apply the LoRA configuration.
+3.  Set up the data loader.
+4.  Initialize the PyTorch Lightning `Trainer` with the appropriate callbacks.
+5.  Start the training process.
+
+Logs and checkpoints will be saved to the output directory specified in `file.toml`.
+
+### 4. Merging PEFT Weights
+
+After fine-tuning, you can merge the LoRA weights back into the base model.
+
+```bash
+# Example for merging LoRA weights
+python src/merge/merge.py \
+  --lora_path /path/to/your/lora_checkpoint.pth \
+  --base_model_path /path/to/base/model.pth \
+  --output_path /path/to/merged_model.pth
+```
+
+This will produce a single `merged_model.pth` file that can be used for deployment and inference.
 
 <h1 align="center">
   <p><img src="assert/logo.jpg" alt="RWKV-PEFT" width="60px"  style="vertical-align: middle; margin-right: 10px;"/>RWKV-PEFT</p>
