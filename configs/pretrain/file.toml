@@ -1,7 +1,7 @@
 model_path = ""
 wandb = ""
 proj_dir = "out/test"
-data_file = "/mnt/g/Projects/MachineLearning/block-blm/data/block_blm_partial_data_device_0"
+data_file = "/public/home/ssjxzkz/Datasets/lm/OptimalScale_ClimbLab/mmap/block_blm_data_device_0"
 data_type = "binidx"
 vocab_size = 256
 my_exit = 99999999
