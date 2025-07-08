@@ -1,22 +1,3 @@
-# Copyright (c) 2021, EleutherAI
-# This file is based on code by the authors denoted below and has been modified from its original version.
-#
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""Processing data for pretraining."""
-
 import argparse
 import multiprocessing
 import os
@@ -36,12 +17,13 @@ from tokenizer import build_tokenizer
 import indexed_dataset
 from threading import Semaphore
 
+
 class Encoder(object):
     def __init__(self, args):
         self.args = args
 
     def initializer(self):
-        # Use Encoder class as a container for global data
+
         Encoder.tokenizer = build_tokenizer(self.args)
 
     def encode(self, text):
@@ -139,7 +121,6 @@ def get_args():
     args = parser.parse_args()
     args.keep_empty = False
 
-    # some default/dummy values for the tokenizer
     args.rank = 0
     args.make_vocab_size_divisible_by = 128
     args.model_parallel_size = 1
@@ -148,12 +129,6 @@ def get_args():
 
 
 def yield_from_files(fnames: list, semaphore):
-    """
-    Iterator over input documents using lm_dataformat. Should be able to handle jsons / texts /
-    other compressed formats. Also filters out empty documents.
-
-    :param fnames: list of filenames
-    """
 
     def yielder(fname, semaphore):
         for f in filter(lambda x: x, lmd.Reader(fname).stream_data()):
@@ -173,11 +148,8 @@ def main():
     print(f"Vocab size: {tokenizer.vocab_size}")
     print(f"Output prefix: {args.output_prefix}")
 
-    # build a semaphore object to stop `yield_from_files` from getting ahead of encoder.encode and
-    # hence building up memory
     semaphore = Semaphore(10000 + args.workers)
 
-    # use multiprocessing to iterate over input documents
     fin = yield_from_files(args.input.split(","), semaphore)
 
     if args.workers > 1:
@@ -187,8 +159,6 @@ def main():
         encoder.initializer()
         encoded_docs = (encoder.encode(doc) for doc in fin)
 
-    # make a dataset builder for each key in args.jsonl_keys
-    # each key will output to a different file beginning with args.output_prefix
     output_bin_files = {}
     output_idx_files = {}
     builders = {}
@@ -205,25 +175,22 @@ def main():
             vocab_size=tokenizer.vocab_size,
         )
 
-    # actually do tokenization
     proc_start = time.time()
     total_bytes_processed = 0
     data_nums = 0
     pbar = tqdm.tqdm()
     for i, (doc, bytes_processed) in enumerate(encoded_docs, start=1):
         total_bytes_processed += bytes_processed
-        data_nums+=1
-        # release semaphore so `yield_from_files` can add another file to the buffer
+        data_nums += 1
+
         semaphore.release()
 
-        # add each tokenized document / sentence
         for key, sentences in doc.items():
             for sentence in sentences:
                 builders[key].add_item(np.array(sentence, dtype=builders[key].dtype))
-            # separate with eos token
+
             builders[key].end_document()
 
-        # log progress
         if i % args.log_interval == 0:
             current = time.time()
             elapsed = current - proc_start
@@ -234,12 +201,11 @@ def main():
             if i != 0:
                 pbar.update(args.log_interval)
 
-    # save output file
     for key in args.jsonl_keys:
         builders[key].finalize(output_idx_files[key])
 
     print("data_nums:", data_nums)
-    
+
 
 if __name__ == "__main__":
     main()

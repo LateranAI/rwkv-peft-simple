@@ -75,18 +75,25 @@ class TrainingArgs:
     magic_prime: int = 0
     my_qa_mask: int = 0
     my_random_steps: int = 0
-    rwkv_version: str = 'x060'
+    rwkv_version: str = "x060"
     my_exit: int = 99999999
     my_exit_tokens: int = 0
     peft: str = "none"
     train_parts: List[str] = field(default_factory=lambda: ["time", "ln"])
     l2warp_sparse: int = 0
-    lora_config: Dict = field(default_factory=lambda: json.loads(
-        '{"lora_load":"", "lora_r":8, "lora_alpha":32, "lora_dropout":0.01}'))
-    pissa_config: Dict = field(default_factory=lambda: json.loads(
-        '{"pissa_load":"", "pissa_init":"", "pissa_r":8, "svd_niter":4}'))
-    bone_config: Dict = field(default_factory=lambda: json.loads(
-        '{"bone_load":"", "bone_r":64}'))
+    lora_config: Dict = field(
+        default_factory=lambda: json.loads(
+            '{"lora_load":"", "lora_r":8, "lora_alpha":32, "lora_dropout":0.01}'
+        )
+    )
+    pissa_config: Dict = field(
+        default_factory=lambda: json.loads(
+            '{"pissa_load":"", "pissa_init":"", "pissa_r":8, "svd_niter":4}'
+        )
+    )
+    bone_config: Dict = field(
+        default_factory=lambda: json.loads('{"bone_load":"", "bone_r":64}')
+    )
     quant: str = "none"
     dataload: str = "get"
     state_tune: bool = False
@@ -95,14 +102,14 @@ class TrainingArgs:
     fla_npu: bool = False
     train_type: str = "none"
     loss_mask: str = "none"
-    mask_id: Dict = field(default_factory=lambda: json.loads(
-        '{"mask0":"0", "mask1":"1"}'))
+    mask_id: Dict = field(
+        default_factory=lambda: json.loads('{"mask0":"0", "mask1":"1"}')
+    )
     data_shuffle: int = 0
     optim: str = "none"
     avg_loss: int = 0
     compile: bool = False
 
-    # PyTorch Lightning specific args
     accelerator: str = "gpu"
     strategy: str = "auto"
     devices: int = 1
@@ -110,7 +117,6 @@ class TrainingArgs:
     precision: str = "fp16"
     accumulate_grad_batches: int = 1
 
-    # train
     my_timestamp: str = field(init=False)
     enable_checkpointing: bool = False
     replace_sampler_ddp: bool = False

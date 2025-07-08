@@ -1,18 +1,3 @@
-# Copyright (c) 2021, EleutherAI
-# This file is based on code by the authors denoted below and has been modified from its original version.
-#
-# Copyright (c) Facebook, Inc. and its affiliates.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
-
-
-# copied from fairseq/fairseq/data/indexed_dataset.py
-# Removed IndexedRawTextDataset since it relied on Fairseq dictionary
-# other slight modifications to remove fairseq dependencies
-# Added document index to index file and made it accessible.
-#    An empty sentence no longer separates documents.
-
 import os
 import shutil
 import struct
@@ -21,8 +6,6 @@ from itertools import accumulate
 
 import numpy as np
 import torch
-
-
 
 
 def __best_fitting_dtype(vocab_size=None):
@@ -131,7 +114,6 @@ def create_doc_idx(sizes):
 
 
 class IndexedDataset(torch.utils.data.Dataset):
-    """Loader for IndexedDataset"""
 
     _HDR_MAGIC = b"TNTIDX\x00\x00"
 
@@ -170,7 +152,6 @@ class IndexedDataset(torch.utils.data.Dataset):
         if self.data_file:
             self.data_file.close()
 
-    # @lru_cache(maxsize=8)
     def __getitem__(self, idx):
         if not self.data_file:
             self.read_data(self.path)
@@ -212,7 +193,7 @@ class IndexedDataset(torch.utils.data.Dataset):
 
     @property
     def supports_prefetch(self):
-        return False  # avoid prefetching to save memory
+        return False
 
 
 class IndexedCachedDataset(IndexedDataset):
@@ -245,11 +226,10 @@ class IndexedCachedDataset(IndexedDataset):
             self.data_file.readinto(a)
             ptx += size
         if self.data_file:
-            # close and delete data file after prefetch so we can pickle
+
             self.data_file.close()
             self.data_file = None
 
-    # @lru_cache(maxsize=8)
     def __getitem__(self, idx):
         if isinstance(idx, int):
             i = idx
@@ -260,7 +240,7 @@ class IndexedCachedDataset(IndexedDataset):
             np.copyto(a, self.cache[ptx : ptx + a.size])
             return a
         elif isinstance(idx, slice):
-            # Hack just to make this work, can optimizer later if necessary
+
             sents = []
             for i in range(*idx.indices(len(self))):
                 sents.append(self[i])
@@ -349,12 +329,10 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
                 def __enter__(self):
                     self._file = open(path, "wb")
 
-                    # Write Magic string so we can check the file format then opening it again.
                     self._file.write(cls._HDR_MAGIC)
-                    # Write version number
-                    # Little endian unsigned 64 Bit integer
+
                     self._file.write(struct.pack("<Q", 1))
-                    # Little endian unsigned 8 Bit integer
+
                     self._file.write(struct.pack("<B", code(dtype)))
 
                     return self
@@ -371,9 +349,8 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
                 def write(self, sizes, doc_idx):
                     pointers = self._get_pointers(sizes)
 
-                    # Little endian unsigned 64 Bit integer
                     self._file.write(struct.pack("<Q", len(sizes)))
-                    # Little endian unsigned 64 Bit integer
+
                     self._file.write(struct.pack("<Q", len(doc_idx)))
 
                     sizes = np.array(sizes, dtype=np.int32)
@@ -399,11 +376,10 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
                     "Index file doesn't match expected format. "
                     "Make sure that --dataset-impl is configured properly."
                 )
-                # Little endian unsigned 64 Bit integer
+
                 version = struct.unpack("<Q", stream.read(8))
                 assert (1,) == version
 
-                # Little endian unsigned 8 Bit integer
                 (dtype_code,) = struct.unpack("<B", stream.read(1))
                 self._dtype = dtypes[dtype_code]
                 self._dtype_size = self._dtype().itemsize
@@ -497,7 +473,6 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self._index)
 
-    # @lru_cache(maxsize=8)
     def __getitem__(self, idx):
         if isinstance(idx, int):
             ptr, size = self._index[idx]
@@ -520,11 +495,7 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
             return sents
 
     def get(self, idx, offset=0, length=None):
-        """Retrieves a single item from the dataset with the option to only
-        return a portion of the item.
 
-        get(idx) is the same as [idx] but get() does not support slicing.
-        """
         ptr, size = self._index[idx]
         if length is None:
             length = size - offset
@@ -579,14 +550,13 @@ class MMapIndexedDatasetBuilder(object):
         self._doc_idx.append(len(self._sizes))
 
     def merge_file_(self, another_file):
-        # Concatenate index
+
         index = MMapIndexedDataset.Index(index_file_path(another_file))
         assert index.dtype == self._dtype
 
         for size in index.sizes:
             self._sizes.append(size)
 
-        # Concatenate data
         with open(data_file_path(another_file), "rb") as f:
             shutil.copyfileobj(f, self._data_file)
 

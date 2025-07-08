@@ -166,17 +166,23 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
 
                     self._token_unit_len = struct.unpack("<I", stream.read(4))[0]
                     if self._token_unit_len == 0:
-                        raise ValueError("token_unit_len cannot be zero in version 2 format.")
+                        raise ValueError(
+                            "token_unit_len cannot be zero in version 2 format."
+                        )
 
                     print_rank_0(
-                        f"[MMapIndexedDataset.Index V2] token_unit_type_code from file: {token_unit_type_code}")
-                    print_rank_0(f"[MMapIndexedDataset.Index V2] token_unit_len from file: {self._token_unit_len}")
+                        f"[MMapIndexedDataset.Index V2] token_unit_type_code from file: {token_unit_type_code}"
+                    )
+                    print_rank_0(
+                        f"[MMapIndexedDataset.Index V2] token_unit_len from file: {self._token_unit_len}"
+                    )
 
                     if token_unit_type_code in NEW_DTYPES:
                         self._dtype = NEW_DTYPES[token_unit_type_code]
                     elif token_unit_type_code in dtypes:
                         print_rank_0(
-                            f"Warning: token_unit_type_code {token_unit_type_code} not in NEW_DTYPES, falling back to legacy dtypes.")
+                            f"Warning: token_unit_type_code {token_unit_type_code} not in NEW_DTYPES, falling back to legacy dtypes."
+                        )
                         self._dtype = dtypes[token_unit_type_code]
                     else:
                         raise ValueError(
@@ -187,7 +193,8 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
                     raise ValueError(f"Unknown index version {self._version}")
 
                 print_rank_0(
-                    f"[MMapIndexedDataset.Index] Version: {self._version}, Resolved Dtype: {self._dtype}, Token Unit Len: {self._token_unit_len if hasattr(self, '_token_unit_len') else 'N/A (V1)'}")
+                    f"[MMapIndexedDataset.Index] Version: {self._version}, Resolved Dtype: {self._dtype}, Token Unit Len: {self._token_unit_len if hasattr(self, '_token_unit_len') else 'N/A (V1)'}"
+                )
 
                 self._dtype_size = self._dtype().itemsize
 
@@ -213,7 +220,9 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
             elif self._version == 2:
                 pointers_count = self._doc_count
             else:
-                raise ValueError(f"Unsupported version {self._version} for pointer count.")
+                raise ValueError(
+                    f"Unsupported version {self._version} for pointer count."
+                )
 
             print_rank_0("    reading pointers...")
             self._pointers = np.frombuffer(
@@ -308,10 +317,15 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
                 if self._index._token_unit_len == 1:
                     return np.empty((0,), dtype=self._index.dtype)
                 else:
-                    return np.empty((0, self._index._token_unit_len), dtype=self._index.dtype)
+                    return np.empty(
+                        (0, self._index._token_unit_len), dtype=self._index.dtype
+                    )
 
             np_array_flat = np.frombuffer(
-                self._bin_buffer, dtype=self._index.dtype, count=elements_to_read, offset=ptr
+                self._bin_buffer,
+                dtype=self._index.dtype,
+                count=elements_to_read,
+                offset=ptr,
             )
 
             if np_array_flat.size > 0:
@@ -323,18 +337,21 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
                 if self._index._token_unit_len == 1:
                     return np_array_flat
                 else:
-                    return np_array_flat.reshape(logical_size, self._index._token_unit_len)
+                    return np_array_flat.reshape(
+                        logical_size, self._index._token_unit_len
+                    )
             else:
                 if self._index._token_unit_len == 1:
                     return np.empty((0,), dtype=self._index.dtype)
                 else:
-                    return np.empty((0, self._index._token_unit_len), dtype=self._index.dtype)
+                    return np.empty(
+                        (0, self._index._token_unit_len), dtype=self._index.dtype
+                    )
 
         elif isinstance(idx, slice):
             start, stop, step = idx.indices(len(self))
             if step != 1:
-                raise ValueError(
-                    "Slices into indexed_dataset must be contiguous")
+                raise ValueError("Slices into indexed_dataset must be contiguous")
 
             if start >= stop:
                 return []
@@ -347,20 +364,33 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
                 total_elements_to_read = sum(logical_sizes_in_slice)
                 split_offsets_flat = list(accumulate(logical_sizes_in_slice))
             elif self._index._version == 2:
-                total_elements_to_read = sum(s * self._index._token_unit_len for s in logical_sizes_in_slice)
-                split_offsets_flat = list(accumulate(s * self._index._token_unit_len for s in logical_sizes_in_slice))
+                total_elements_to_read = sum(
+                    s * self._index._token_unit_len for s in logical_sizes_in_slice
+                )
+                split_offsets_flat = list(
+                    accumulate(
+                        s * self._index._token_unit_len for s in logical_sizes_in_slice
+                    )
+                )
             else:
                 raise ValueError(f"Unknown index version {self._index._version}")
 
             if total_elements_to_read == 0:
-                empty_shape = (0,) if self._index._token_unit_len == 1 else (0, self._index._token_unit_len)
+                empty_shape = (
+                    (0,)
+                    if self._index._token_unit_len == 1
+                    else (0, self._index._token_unit_len)
+                )
                 return [
                     np.empty(empty_shape, dtype=self._index.dtype)
                     for _ in logical_sizes_in_slice
                 ]
 
             np_array_bulk_flat = np.frombuffer(
-                self._bin_buffer, dtype=self._index.dtype, count=total_elements_to_read, offset=ptr
+                self._bin_buffer,
+                dtype=self._index.dtype,
+                count=total_elements_to_read,
+                offset=ptr,
             )
 
             if not split_offsets_flat or not split_offsets_flat[:-1]:
@@ -384,28 +414,34 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
                         reshaped_sents.append(item_flat_array)
                     else:
                         reshaped_sents.append(
-                            item_flat_array.reshape(current_item_logical_size, self._index._token_unit_len)
+                            item_flat_array.reshape(
+                                current_item_logical_size, self._index._token_unit_len
+                            )
                         )
                 elif current_item_logical_size == 0:
-                    empty_shape = (0,) if self._index._token_unit_len == 1 else (0, self._index._token_unit_len)
-                    reshaped_sents.append(np.empty(empty_shape, dtype=self._index.dtype))
+                    empty_shape = (
+                        (0,)
+                        if self._index._token_unit_len == 1
+                        else (0, self._index._token_unit_len)
+                    )
+                    reshaped_sents.append(
+                        np.empty(empty_shape, dtype=self._index.dtype)
+                    )
                 else:
-                    empty_shape = (0,) if self._index._token_unit_len == 1 else (0, self._index._token_unit_len)
-                    reshaped_sents.append(np.empty(empty_shape, dtype=self._index.dtype))
+                    empty_shape = (
+                        (0,)
+                        if self._index._token_unit_len == 1
+                        else (0, self._index._token_unit_len)
+                    )
+                    reshaped_sents.append(
+                        np.empty(empty_shape, dtype=self._index.dtype)
+                    )
 
             return reshaped_sents
         return None
 
     def get(self, idx, offset=0, length=0):
-        """Retrieves an item or a portion of an item from the dataset, with 'free addressing'.
 
-        The \`offset\` and \`length\` parameters are in units of **logical tokens**.
-        \'idx\` is used to get the starting byte pointer of the item/stream.
-        The size of the item specified by \`idx\` in the .idx file does NOT cap the read length.
-        Reading beyond the end of the mmaped .bin file will result in an error from np.frombuffer.
-
-        The returned array will have shape \`[num_logical_tokens_read, token_unit_len]\`.
-        """
         item_start_byte_ptr, _ = self._index[idx]
 
         token_unit_len = self._index._token_unit_len
@@ -414,7 +450,9 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
         final_offset_logical_tokens = max(0, offset if offset is not None else 0)
         num_logical_tokens_to_read = max(0, length if length is not None else 0)
 
-        start_read_byte_offset = item_start_byte_ptr + (final_offset_logical_tokens * token_unit_len * dtype_byte_size)
+        start_read_byte_offset = item_start_byte_ptr + (
+            final_offset_logical_tokens * token_unit_len * dtype_byte_size
+        )
 
         num_base_elements_to_read = num_logical_tokens_to_read * token_unit_len
 
@@ -422,10 +460,18 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
             self._bin_buffer,
             dtype=self._index.dtype,
             count=num_base_elements_to_read,
-            offset=start_read_byte_offset
+            offset=start_read_byte_offset,
         )
 
-        return np_array_flat.reshape(num_logical_tokens_to_read, token_unit_len).squeeze().astype(float) if self.token_unit_type_code == 2 else np_array_flat.reshape(num_logical_tokens_to_read, token_unit_len).squeeze().astype(int)
+        return (
+            np_array_flat.reshape(num_logical_tokens_to_read, token_unit_len)
+            .squeeze()
+            .astype(float)
+            if self.token_unit_type_code == 2
+            else np_array_flat.reshape(num_logical_tokens_to_read, token_unit_len)
+            .squeeze()
+            .astype(int)
+        )
 
     def pad(self, idx, length=None):
         ptr, size = self._index[idx]
@@ -439,7 +485,10 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
             )
             ptr0, _ = self._index[0]
             np_array0 = np.frombuffer(
-                self._bin_buffer, dtype=self._index.dtype, count=length - size, offset=ptr0
+                self._bin_buffer,
+                dtype=self._index.dtype,
+                count=length - size,
+                offset=ptr0,
             )
             np_array = np.append(np_array, np_array0)
         return np_array.astype(int), min(size, length)

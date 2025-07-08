@@ -27,6 +27,7 @@ import torch
 from loguru import logger
 from lightning import seed_everything
 
+
 @dataclass
 class TrainConfig:
     """训练超参数配置
@@ -101,7 +102,9 @@ class TrainConfig:
         self.betas = (self.beta1, self.beta2)
 
         if self.random_seed >= 0:
-            logger.warning(f"GLOBAL SEED {self.random_seed} THIS WILL AFFECT MULTIGPU SAMPLING")
+            logger.warning(
+                f"GLOBAL SEED {self.random_seed} THIS WILL AFFECT MULTIGPU SAMPLING"
+            )
             seed_everything(self.random_seed)
 
         if self.warmup_steps < 0:
@@ -125,7 +128,9 @@ class TrainConfig:
         else:
             self.precision = "bf16"
 
-        train_config.my_timestamp = datetime.datetime.today().strftime("%Y-%m-%d-%H-%M-%S")
+        train_config.my_timestamp = datetime.datetime.today().strftime(
+            "%Y-%m-%d-%H-%M-%S"
+        )
 
     def show(self):
         logger.info(f"TrainConfig: {self.__dict__}")
