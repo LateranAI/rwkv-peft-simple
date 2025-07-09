@@ -1,3 +1,22 @@
+# Copyright (c) 2021, EleutherAI
+# This file is based on code by the authors denoted below and has been modified from its original version.
+#
+# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Megatron tokenizers."""
+
 from abc import ABC
 from abc import abstractmethod
 
@@ -8,9 +27,11 @@ from typing import List, Union
 
 
 def build_tokenizer(args):
-
+    """Initialize tokenizer."""
     if args.rank == 0:
         print("> building {} tokenizer ...".format(args.tokenizer_type), flush=True)
+
+    # Select and instantiate the tokenizer.
 
     if args.tokenizer_type.lower() == "HFTokenizer".lower():
         assert args.vocab_file is not None
@@ -23,12 +44,15 @@ def build_tokenizer(args):
             "{} tokenizer is not " "implemented.".format(args.tokenizer_type)
         )
 
+    # Add vocab size.
     args.padded_vocab_size = _vocab_size_with_padding(tokenizer.vocab_size, args)
 
     return tokenizer
 
 
 def _vocab_size_with_padding(orig_vocab_size, args):
+    """Pad vocab size so it is divisible by model parallel size and
+    still having GPU friendly size."""
 
     after = orig_vocab_size
     multiple = args.make_vocab_size_divisible_by * args.model_parallel_size
@@ -44,6 +68,7 @@ def _vocab_size_with_padding(orig_vocab_size, args):
 
 
 class AbstractTokenizer(ABC):
+    """Abstract class for tokenizer."""
 
     def __init__(self, name):
         self.name = name
@@ -57,13 +82,13 @@ class AbstractTokenizer(ABC):
     @property
     @abstractmethod
     def vocab(self):
-
+        """Dictionary from vocab text token to id token."""
         pass
 
     @property
     @abstractmethod
     def inv_vocab(self):
-
+        """Dictionary from vocab id token to text token."""
         pass
 
     @abstractmethod
@@ -107,6 +132,7 @@ class AbstractTokenizer(ABC):
 
 
 class HFTokenizer(AbstractTokenizer):
+    """Designed to Integrate HF's Tokenizer library."""
 
     def __init__(self, vocab_file):
         name = "HFTokenizer"
@@ -143,13 +169,15 @@ class HFTokenizer(AbstractTokenizer):
 
 
 class RWKVTokenizer(AbstractTokenizer):
+    """RWKV Worlds Tokenizer."""
 
-    def __init__(self, vocab_file="rwkv_vocab_v20230424.txt"):
+    def __init__(self, vocab_file='rwkv_vocab_v20230424.txt'):
         name = "RWKVTokenizer"
         super().__init__(name)
 
         self.tokenizer = TRIE_TOKENIZER(vocab_file)
-        self.eod_id = 0
+        self.eod_id = 0  # self.tokenizer.token_to_id("<|endoftext|>")
+        # self.pad_id = self.tokenizer.token_to_id("<|padding|>")
 
     @property
     def vocab_size(self):

@@ -22,7 +22,6 @@ from dataclasses import dataclass
 import tomllib
 from loguru import logger
 
-
 @dataclass
 class ModelConfig:
     """模型结构配置

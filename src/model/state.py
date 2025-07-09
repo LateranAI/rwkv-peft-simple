@@ -95,5 +95,3 @@ class BlockStateList:
         self.shift_states[layer, 0] = state.time_mix_state.shift_state
         self.wkv_states[layer] = state.time_mix_state.wkv_state
         self.shift_states[layer, 1] = state.channel_mix_state.shift_state
-
-

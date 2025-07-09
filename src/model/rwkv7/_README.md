@@ -35,7 +35,7 @@
   - **职责**: **将 Time-mix 和 Channel-mix 组合成一个完整的 RWKV 块**。
   - **关键类**: `Block`。
   - **核心逻辑**:
-    1.  在 `__init__` 中实例化 `RWKV_Tmix_x060` 和 `RWKV_CMix_x060`。
+    1.  在 `__init__` 中实例化 `RWKV_Tmix_x070` 和 `RWKV_CMix_x070`。
     2.  `forward` 方法严格遵循 RWKV 的计算流程：输入 `x` 首先经过 `att` 模块（Time-mix），其输出再经过 `ffn` 模块（Channel-mix）。每个模块都会接收并更新相应的 `block_state`。
 
 - **`model.py`**:
@@ -100,5 +100,5 @@ graph TD
     - **功能**: 单个 RWKV 块的构造器。通常由 `RWKV7` 内部使用。
 
 - **`att.py` / `ffn.py`**:
-  - `RWKV_Tmix_x060(...)`, `RWKV_CMix_x060(...)`:
+  - `RWKV_Tmix_x070(...)`, `RWKV_CMix_x070(...)`:
     - **功能**: 模型基础组件的构造器。通常由 `Block` 内部使用。 

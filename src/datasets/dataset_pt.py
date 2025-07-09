@@ -121,7 +121,8 @@ class MyDataset(Dataset):
             f"Current vocab size = {self.vocab_size} (make sure it's correct)")
 
         self.data = MMapIndexedDataset(args.data_file)
-        self.data_size = len(self.data._bin_buffer) // self.data._index._dtype_size
+        self.data_size = len(
+            self.data._bin_buffer) // self.data._index._dtype_size
         rank_zero_info(f"Data has {self.data_size} tokens.")
 
         self.samples_per_epoch = args.epoch_steps * args.real_bsz
