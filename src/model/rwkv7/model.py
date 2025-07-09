@@ -141,9 +141,9 @@ class RWKV7(nn.Module):
                 x, v_first, new_block_state = torch_checkpoint(block, x, v_first, block_state, attention_mask, use_reentrant=False)
 
             else:
-                x, v_first, new_block_state = block(x,v_first,block_state, attention_mask)
+                x, v_first, new_block_state = block(x, v_first, block_state, attention_mask)
     
-            new_states[i] = new_block_state 
+            new_states[i] = new_block_state
 
         x = self.ln_out(x)
         x = self.head(x)

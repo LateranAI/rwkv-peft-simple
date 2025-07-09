@@ -37,7 +37,7 @@ def RUN_RWKV7_INFCTX(*args, **kwargs):
 # HEAD_SIZE = model_config.head_size_a
 if 'x070' in train_config.my_testing:
     HEAD_SIZE = 64
-    CHUNK_LEN = 16
+    CHUNK_LEN = 512
 
     flags = ['-res-usage', f'-D_C_={HEAD_SIZE}', f"-D_CHUNK_LEN_={CHUNK_LEN}", "--use_fast_math", "-O3", "-Xptxas -O3", "--extra-device-vectorization"]
     load(name="wind_backstepping", sources=[f'src/model/cuda/wkv7_cuda.cu', 'src/model/cuda/wkv7_op.cpp'], is_python_module=False, verbose=True, extra_cuda_cflags=flags)

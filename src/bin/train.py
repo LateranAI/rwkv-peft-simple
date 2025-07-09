@@ -59,6 +59,8 @@ from src.training_loop.args_type import TrainingArgs
 from src.training_loop.trainer import train_callback
 from src.datasets.dataset_pt import get_data_by_l_version
 
+torch.autograd.set_detect_anomaly(True)
+
 
 @rank_zero_only
 def show_configs():
@@ -125,6 +127,7 @@ def main(config_dir: str):
         num_nodes=train_config.num_nodes,
         precision=train_config.precision,
         logger=False,
+        detect_anomaly=True,
         callbacks=[train_callback(train_config)],
         max_epochs=train_config.epoch_count,
         check_val_every_n_epoch=TrainingArgs.check_val_every_n_epoch,

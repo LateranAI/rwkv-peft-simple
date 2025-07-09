@@ -124,7 +124,7 @@ __global__ void backward_kernel(int T, int H, F_ w_, F_ q_, F_ k_, F_ v_, F_ a_,
 #pragma unroll        
         for (int j = 0; j < C; j++) { // 传递梯度到前一状态
             dstate[j] = dstate[j]*w[j] + dSb * a[j];
-            dstateT[j] = dstateT[j]*iwi + ai * dSb_shared[j];
+            dstateT[j] = dstateT[j]*wi + ai * dSb_shared[j];
         }
     }
 }
